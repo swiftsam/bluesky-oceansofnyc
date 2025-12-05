@@ -13,9 +13,12 @@ See the [plan.md](plan.md) file for a detailed breakdown of the steps involved i
 - **atproto** - Bluesky API client
 - **python-dotenv** - Environment variable management
 
-### Future Features (TBD)
-- Mapping API for static map image generation
-- License Plate to VIN lookup API
+### Mapping & Geocoding
+- Uses the **staticmap** Python library to generate map images from OpenStreetMap tiles
+- Uses **Nominatim** (OpenStreetMap) for reverse geocoding to show neighborhood names
+- No API key required
+- Adds a red marker at the sighting location
+- Respects Nominatim's 1 request/second rate limit
 
 ## Installation
 
@@ -171,15 +174,18 @@ uv run python main.py post 2
 - Requires confirmation (y/n) before posting
 - Automatically compresses images to fit Bluesky's 976KB limit
 - Tracks sighting count per license plate
+- Generates a map image showing the sighting location
+- Posts both the vehicle photo and map image
 
 **Post format:**
 ```
 🌊 Fisker Ocean sighting!
 
-🚗 License plate: T731580C
+🚗 Plate: T731580C
+📈 2 out of 2053 Oceans collected
 🔢 This is the 1st sighting of this vehicle
 📅 November 15, 2025 at 11:18 AM
-📍 Spotted at 40.7224, -73.9804
+📍 Spotted in Alphabet City, Manhattan
 ```
 
 ## Features
@@ -188,6 +194,10 @@ uv run python main.py post 2
 - ✅ **SQLite Database** - Stores all sightings locally with full history
 - ✅ **NYC TLC Data Integration** - Import and query 100,000+ NYC for-hire vehicle records
 - ✅ **Vehicle Lookup** - Verify license plates against official TLC database
+- ✅ **Wildcard Plate Search** - Find plates with partial matches (e.g., T73**580C)
+- ✅ **Collection Progress** - Tracks how many unique Fisker Oceans have been sighted
+- ✅ **Map Generation** - Creates static map images showing sighting locations using OpenStreetMap
+- ✅ **Neighborhood Geocoding** - Converts GPS coordinates to human-readable NYC neighborhoods (e.g., "Fort Greene, Brooklyn")
 - ✅ **Sighting Counter** - Tracks how many times each vehicle has been spotted
 - ✅ **Image Compression** - Automatically compresses large images to meet Bluesky's size limits
 - ✅ **Post Preview** - Shows exactly what will be posted before publishing

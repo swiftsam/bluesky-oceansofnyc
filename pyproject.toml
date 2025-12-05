@@ -10,6 +10,7 @@ dependencies = [
     "click>=8.1.0",
     "atproto>=0.0.55",
     "python-dotenv>=1.0.0",
+    "staticmap>=0.5.7",
 ]
 
 [project.scripts]

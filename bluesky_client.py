@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime
 from PIL import Image
 from atproto import Client, models
+from geocoding import Geocoder
 
 
 class BlueskyClient:
@@ -160,13 +161,23 @@ class BlueskyClient:
         dt = datetime.fromisoformat(timestamp)
         formatted_time = dt.strftime("%B %d, %Y at %I:%M %p")
 
+        # Try to get neighborhood name via reverse geocoding
+        geocoder = Geocoder()
+        location_text = geocoder.get_neighborhood_name(latitude, longitude)
+
+        # Fall back to coordinates if geocoding fails
+        if location_text:
+            location_line = f"📍 Spotted in {location_text}"
+        else:
+            location_line = f"📍 Spotted at {latitude:.4f}, {longitude:.4f}"
+
         return (
             f"🌊 Fisker Ocean sighting!\n\n"
             f"🚗 Plate: {license_plate}\n"
             f"📈 {unique_sighted} out of {total_fiskers} Oceans collected\n"
             f"🔢 This is the {ordinal} sighting of this vehicle\n"
             f"📅 {formatted_time}\n"
-            f"📍 Spotted at {latitude:.4f}, {longitude:.4f}"
+            f"{location_line}"
         )
 
     def create_sighting_post(

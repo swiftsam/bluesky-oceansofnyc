@@ -22,5 +22,8 @@ images/
 *.png
 *.gif
 
+# Maps
+maps/
+
 # Environment variables
 .env

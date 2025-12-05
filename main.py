@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from database import SightingsDatabase
 from exif_utils import extract_image_metadata, ExifDataError
 from bluesky_client import BlueskyClient
+from map_generator import MapGenerator
 
 # Load environment variables from .env file
 load_dotenv()
@@ -273,11 +274,23 @@ def post(sighting_id: int):
             total_fiskers=total_fiskers
         )
 
+        # Generate map image
+        click.echo("\nGenerating map image...")
+        map_gen = MapGenerator()
+        map_path = map_gen.generate_sighting_map(
+            latitude=latitude,
+            longitude=longitude,
+            license_plate=license_plate
+        )
+        click.echo(f"✓ Map saved to: {map_path}")
+
         click.echo("\n" + "="*60)
         click.echo("POST PREVIEW")
         click.echo("="*60)
         click.echo(post_text)
-        click.echo("\nImage: " + image_path)
+        click.echo(f"\nImages:")
+        click.echo(f"  1. {image_path}")
+        click.echo(f"  2. {map_path}")
         click.echo("="*60 + "\n")
 
         if not click.confirm("Do you want to post this to Bluesky?"):
@@ -292,7 +305,7 @@ def post(sighting_id: int):
             timestamp=timestamp,
             latitude=latitude,
             longitude=longitude,
-            images=[image_path],
+            images=[image_path, map_path],
             unique_sighted=unique_sighted,
             total_fiskers=total_fiskers
         )
