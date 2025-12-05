@@ -8,11 +8,6 @@
    - Extracts timestamp from EXIF data
    - Raises `ExifDataError` if GPS data is missing
 
-2. ⏸️ **License plate confirmation** using a license plate to VIN lookup API
-   - Not yet implemented
-   - Currently relies on manual license plate input
-   - Future enhancement
-
 3. ✅ **Store record in database** with extracted data and image path
    - Implemented in `database.py`
    - SQLite database stores: license_plate, timestamp, latitude, longitude, image_path, created_at
@@ -64,7 +59,6 @@
 - Post preview and confirmation
 
 ### ⏸️ Future Enhancements
-- License plate to VIN lookup API integration
 - Static map image generation and attachment
 - Automated posting workflow
 - Web interface

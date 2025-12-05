@@ -205,3 +205,64 @@ class SightingsDatabase:
         conn.close()
 
         return count
+
+    def filter_fisker_vehicles(self) -> int:
+        """
+        Remove all non-Fisker vehicles from the TLC database.
+        Fisker VINs start with 'VCF1'.
+
+        Returns:
+            Number of Fisker vehicles remaining
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM tlc_vehicles WHERE vehicle_vin_number NOT LIKE 'VCF1%'")
+        conn.commit()
+
+        cursor.execute("SELECT COUNT(*) FROM tlc_vehicles")
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        return count
+
+    def get_unique_sighted_count(self) -> int:
+        """Get the count of unique license plates that have been sighted."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(DISTINCT license_plate) FROM sightings")
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        return count
+
+    def search_plates_wildcard(self, pattern: str) -> list:
+        """
+        Search for license plates using wildcard pattern.
+        Use * for any number of characters.
+
+        Args:
+            pattern: Search pattern like 'T73**580C' where * matches any character
+
+        Returns:
+            List of matching vehicle records
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Convert * to SQL wildcard _
+        sql_pattern = pattern.replace('*', '_')
+
+        cursor.execute("""
+            SELECT dmv_license_plate_number, vehicle_vin_number, vehicle_year,
+                   name, base_name, base_type
+            FROM tlc_vehicles
+            WHERE dmv_license_plate_number LIKE ?
+            ORDER BY dmv_license_plate_number
+        """, (sql_pattern,))
+
+        results = cursor.fetchall()
+        conn.close()
+
+        return results

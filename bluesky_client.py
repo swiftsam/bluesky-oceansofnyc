@@ -135,7 +135,9 @@ class BlueskyClient:
         sighting_count: int,
         timestamp: str,
         latitude: float,
-        longitude: float
+        longitude: float,
+        unique_sighted: int,
+        total_fiskers: int
     ) -> str:
         """
         Format the text for a sighting post.
@@ -146,6 +148,8 @@ class BlueskyClient:
             timestamp: When the sighting occurred (ISO format)
             latitude: GPS latitude
             longitude: GPS longitude
+            unique_sighted: Number of unique Fisker plates sighted
+            total_fiskers: Total number of Fisker vehicles in TLC database
 
         Returns:
             Formatted post text
@@ -158,7 +162,8 @@ class BlueskyClient:
 
         return (
             f"🌊 Fisker Ocean sighting!\n\n"
-            f"🚗 License plate: {license_plate}\n"
+            f"🚗 Plate: {license_plate}\n"
+            f"📈 {unique_sighted} out of {total_fiskers} Oceans collected\n"
             f"🔢 This is the {ordinal} sighting of this vehicle\n"
             f"📅 {formatted_time}\n"
             f"📍 Spotted at {latitude:.4f}, {longitude:.4f}"
@@ -171,7 +176,9 @@ class BlueskyClient:
         timestamp: str,
         latitude: float,
         longitude: float,
-        images: list[str]
+        images: list[str],
+        unique_sighted: int,
+        total_fiskers: int
     ) -> dict:
         """
         Create a formatted sighting post for Bluesky.
@@ -183,6 +190,8 @@ class BlueskyClient:
             latitude: GPS latitude
             longitude: GPS longitude
             images: List of image paths to include
+            unique_sighted: Number of unique Fisker plates sighted
+            total_fiskers: Total number of Fisker vehicles in TLC database
 
         Returns:
             Post response from Bluesky API
@@ -192,7 +201,9 @@ class BlueskyClient:
             sighting_count=sighting_count,
             timestamp=timestamp,
             latitude=latitude,
-            longitude=longitude
+            longitude=longitude,
+            unique_sighted=unique_sighted,
+            total_fiskers=total_fiskers
         )
 
         return self.create_post(text=text, images=images)

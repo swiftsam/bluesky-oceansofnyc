@@ -19,17 +19,70 @@ def cli():
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('license_plate')
 def process(image_path: str, license_plate: str):
-    """Process a Fisker Ocean sighting image and store it in the database."""
+    """
+    Process a Fisker Ocean sighting image and store it in the database.
+
+    If license_plate contains wildcards (*), searches for matches and prompts for selection.
+    Example: T73**580C
+    """
     try:
         click.echo(f"Processing image: {image_path}")
         click.echo(f"License plate: {license_plate}")
 
+        db = SightingsDatabase()
+
+        # Check if license plate contains wildcards
+        if '*' in license_plate:
+            click.echo(f"\nSearching for plates matching pattern: {license_plate}")
+            results = db.search_plates_wildcard(license_plate.upper())
+
+            if not results:
+                click.echo(f"Error: No plates found matching pattern: {license_plate}", err=True)
+                raise click.Abort()
+
+            click.echo(f"\nFound {len(results)} matching plate(s):\n")
+
+            # Display options
+            for idx, result in enumerate(results, 1):
+                plate, vin, year, owner, base_name, base_type = result
+                click.echo(f"{idx}. {plate} - {year} (VIN: {vin})")
+                click.echo(f"   Owner: {owner}")
+                click.echo(f"   Base: {base_name}")
+                click.echo()
+
+            # Prompt for selection
+            if len(results) == 1:
+                if click.confirm(f"Use plate {results[0][0]}?", default=True):
+                    license_plate = results[0][0]
+                else:
+                    click.echo("Operation cancelled.")
+                    raise click.Abort()
+            else:
+                selection = click.prompt(
+                    f"Select plate number (1-{len(results)}) or 'q' to quit",
+                    type=str
+                )
+
+                if selection.lower() == 'q':
+                    click.echo("Operation cancelled.")
+                    raise click.Abort()
+
+                try:
+                    idx = int(selection) - 1
+                    if 0 <= idx < len(results):
+                        license_plate = results[idx][0]
+                        click.echo(f"\nSelected: {license_plate}")
+                    else:
+                        click.echo("Error: Invalid selection", err=True)
+                        raise click.Abort()
+                except ValueError:
+                    click.echo("Error: Invalid input", err=True)
+                    raise click.Abort()
+
         metadata = extract_image_metadata(image_path)
-        click.echo(f"✓ Extracted EXIF data:")
+        click.echo(f"\n✓ Extracted EXIF data:")
         click.echo(f"  - Timestamp: {metadata['timestamp']}")
         click.echo(f"  - Location: {metadata['latitude']}, {metadata['longitude']}")
-
-        db = SightingsDatabase()
 
         previous_count = db.get_sighting_count(license_plate)
 
@@ -125,6 +178,65 @@ def lookup_tlc(license_plate: str):
 
 
 @cli.command()
+def filter_fiskers():
+    """Remove all non-Fisker vehicles from TLC database (keeps only VINs starting with VCF1)."""
+    try:
+        db = SightingsDatabase()
+
+        original_count = db.get_tlc_vehicle_count()
+        click.echo(f"Current TLC vehicles in database: {original_count:,}")
+
+        if not click.confirm("Remove all non-Fisker vehicles? This will keep only vehicles with VINs starting with 'VCF1'"):
+            click.echo("Operation cancelled.")
+            return
+
+        fisker_count = db.filter_fisker_vehicles()
+        removed = original_count - fisker_count
+
+        click.echo(f"✓ Filtered database to Fisker vehicles only")
+        click.echo(f"  - Fisker vehicles: {fisker_count:,}")
+        click.echo(f"  - Removed: {removed:,}")
+
+    except Exception as e:
+        click.echo(f"Error filtering vehicles: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument('pattern')
+def search_plate(pattern: str):
+    """
+    Search for license plates using wildcard pattern.
+
+    Use * to match any single character.
+    Example: T73**580C will match T731580C, T732580C, etc.
+    """
+    try:
+        db = SightingsDatabase()
+        results = db.search_plates_wildcard(pattern.upper())
+
+        if not results:
+            click.echo(f"No plates found matching pattern: {pattern}")
+            return
+
+        click.echo(f"\nFound {len(results)} matching plate(s):\n")
+        click.echo("="*80)
+
+        for result in results:
+            plate, vin, year, owner, base_name, base_type = result
+            click.echo(f"Plate: {plate}")
+            click.echo(f"  VIN: {vin}")
+            click.echo(f"  Year: {year}")
+            click.echo(f"  Owner: {owner}")
+            click.echo(f"  Base: {base_name} ({base_type})")
+            click.echo("="*80)
+
+    except Exception as e:
+        click.echo(f"Error searching plates: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
 @click.argument('sighting_id', type=int)
 def post(sighting_id: int):
     """Post a sighting to Bluesky by its database ID."""
@@ -147,6 +259,8 @@ def post(sighting_id: int):
 
         db = SightingsDatabase()
         sighting_count = db.get_sighting_count(license_plate)
+        unique_sighted = db.get_unique_sighted_count()
+        total_fiskers = db.get_tlc_vehicle_count()
 
         bluesky = BlueskyClient()
         post_text = bluesky.format_sighting_text(
@@ -154,7 +268,9 @@ def post(sighting_id: int):
             sighting_count=sighting_count,
             timestamp=timestamp,
             latitude=latitude,
-            longitude=longitude
+            longitude=longitude,
+            unique_sighted=unique_sighted,
+            total_fiskers=total_fiskers
         )
 
         click.echo("\n" + "="*60)
@@ -176,7 +292,9 @@ def post(sighting_id: int):
             timestamp=timestamp,
             latitude=latitude,
             longitude=longitude,
-            images=[image_path]
+            images=[image_path],
+            unique_sighted=unique_sighted,
+            total_fiskers=total_fiskers
         )
 
         click.echo(f"✓ Successfully posted to Bluesky!")
