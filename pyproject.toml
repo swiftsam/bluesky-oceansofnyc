@@ -1,0 +1,16 @@
+[project]
+name = "bluesky-oceansofnyc"
+version = "0.1.0"
+description = "Fisker Ocean spotter Bluesky Bot"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pillow>=10.0.0",
+    "requests>=2.31.0",
+    "click>=8.1.0",
+    "atproto>=0.0.55",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+ocean-bot = "main:cli"

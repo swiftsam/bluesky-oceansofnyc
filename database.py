@@ -1,0 +1,207 @@
+import sqlite3
+import csv
+from datetime import datetime
+from pathlib import Path
+
+
+class SightingsDatabase:
+    def __init__(self, db_path: str = "sightings.db"):
+        self.db_path = db_path
+        self.init_database()
+
+    def init_database(self):
+        """Initialize the database with the sightings and TLC vehicle tables."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sightings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                license_plate TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                image_path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(license_plate, timestamp)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tlc_vehicles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                active TEXT,
+                vehicle_license_number TEXT,
+                name TEXT,
+                license_type TEXT,
+                expiration_date TEXT,
+                permit_license_number TEXT,
+                dmv_license_plate_number TEXT,
+                vehicle_vin_number TEXT,
+                wheelchair_accessible TEXT,
+                certification_date TEXT,
+                hack_up_date TEXT,
+                vehicle_year TEXT,
+                base_number TEXT,
+                base_name TEXT,
+                base_type TEXT,
+                veh TEXT,
+                base_telephone_number TEXT,
+                website TEXT,
+                base_address TEXT,
+                reason TEXT,
+                order_date TEXT,
+                last_date_updated TEXT,
+                last_time_updated TEXT,
+                import_date TEXT,
+                UNIQUE(dmv_license_plate_number)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tlc_plate ON tlc_vehicles(dmv_license_plate_number)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tlc_vin ON tlc_vehicles(vehicle_vin_number)
+        """)
+
+        conn.commit()
+        conn.close()
+
+    def add_sighting(self, license_plate: str, timestamp: str, latitude: float, longitude: float, image_path: str):
+        """Add a new sighting to the database."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        created_at = datetime.now().isoformat()
+
+        cursor.execute("""
+            INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (license_plate, timestamp, latitude, longitude, image_path, created_at))
+
+        conn.commit()
+        conn.close()
+
+    def get_sighting_count(self, license_plate: str) -> int:
+        """Get the number of times a license plate has been spotted."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM sightings WHERE license_plate = ?
+        """, (license_plate,))
+
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        return count
+
+    def get_all_sightings(self, license_plate: str = None):
+        """Get all sightings, optionally filtered by license plate."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        if license_plate:
+            cursor.execute("""
+                SELECT * FROM sightings WHERE license_plate = ? ORDER BY timestamp DESC
+            """, (license_plate,))
+        else:
+            cursor.execute("SELECT * FROM sightings ORDER BY timestamp DESC")
+
+        sightings = cursor.fetchall()
+        conn.close()
+
+        return sightings
+
+    def import_tlc_data(self, csv_path: str) -> int:
+        """
+        Import TLC vehicle data from CSV file.
+
+        Args:
+            csv_path: Path to the TLC CSV file
+
+        Returns:
+            Number of records imported
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        import_date = datetime.now().isoformat()
+        count = 0
+
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                try:
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO tlc_vehicles (
+                            active, vehicle_license_number, name, license_type,
+                            expiration_date, permit_license_number, dmv_license_plate_number,
+                            vehicle_vin_number, wheelchair_accessible, certification_date,
+                            hack_up_date, vehicle_year, base_number, base_name,
+                            base_type, veh, base_telephone_number, website,
+                            base_address, reason, order_date, last_date_updated,
+                            last_time_updated, import_date
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        row.get('Active', ''),
+                        row.get('Vehicle License Number', ''),
+                        row.get('Name', ''),
+                        row.get('License Type', ''),
+                        row.get('Expiration Date', ''),
+                        row.get('Permit License Number', ''),
+                        row.get('DMV License Plate Number', ''),
+                        row.get('Vehicle VIN Number', ''),
+                        row.get('Wheelchair Accessible', ''),
+                        row.get('Certification Date', ''),
+                        row.get('Hack Up Date', ''),
+                        row.get('Vehicle Year', ''),
+                        row.get('Base Number', ''),
+                        row.get('Base Name', ''),
+                        row.get('Base Type', ''),
+                        row.get('VEH', ''),
+                        row.get('Base Telephone Number', ''),
+                        row.get('Website', ''),
+                        row.get('Base Address', ''),
+                        row.get('Reason', ''),
+                        row.get('Order Date', ''),
+                        row.get('Last Date Updated', ''),
+                        row.get('Last Time Updated', ''),
+                        import_date
+                    ))
+                    count += 1
+                except sqlite3.IntegrityError:
+                    pass
+
+        conn.commit()
+        conn.close()
+
+        return count
+
+    def get_tlc_vehicle_by_plate(self, license_plate: str):
+        """Get TLC vehicle information by license plate."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT * FROM tlc_vehicles WHERE dmv_license_plate_number = ?
+        """, (license_plate,))
+
+        vehicle = cursor.fetchone()
+        conn.close()
+
+        return vehicle
+
+    def get_tlc_vehicle_count(self) -> int:
+        """Get total count of TLC vehicles in database."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM tlc_vehicles")
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        return count
