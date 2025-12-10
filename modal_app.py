@@ -43,6 +43,7 @@ volume = modal.Volume.from_name("fisker-ocean-data", create_if_missing=True)
 VOLUME_PATH = "/data"
 IMAGES_PATH = f"{VOLUME_PATH}/images"
 MAPS_PATH = f"{VOLUME_PATH}/maps"
+TLC_PATH = f"{VOLUME_PATH}/tlc"
 
 
 @app.function(
@@ -609,6 +610,114 @@ def sms_webhook():
     return web_app
 
 
+# ==================== TLC Data Updates ====================
+
+@app.function(
+    image=image,
+    secrets=secrets,
+    volumes={VOLUME_PATH: volume},
+    timeout=1800,  # 30 minutes for large CSV download and processing
+)
+def update_tlc_data():
+    """
+    Download latest TLC vehicle data from NYC Open Data and update the database.
+    Stores versioned CSVs in Modal volume and filters to Fisker vehicles only.
+    """
+    import os
+    from datetime import datetime
+    from validate.tlc import TLCDatabase
+
+    print(f"🚀 Starting TLC data update at {datetime.now()}")
+    print(f"{'='*60}")
+
+    # Ensure TLC directory exists
+    os.makedirs(TLC_PATH, exist_ok=True)
+
+    try:
+        # Initialize TLC database
+        tlc_db = TLCDatabase()
+
+        # Download, import, and filter
+        result = tlc_db.update_from_nyc_open_data(output_dir=TLC_PATH)
+
+        # Commit volume changes to persist CSVs
+        volume.commit()
+
+        print(f"\n{'='*60}")
+        print(f"✓ TLC data update complete!")
+        print(f"  CSV: {result['csv_path']}")
+        print(f"  Fisker vehicles: {result['fisker_count']:,}")
+        print(f"  Timestamp: {result['timestamp']}")
+        print(f"{'='*60}")
+
+        return result
+
+    except Exception as e:
+        print(f"❌ Error updating TLC data: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@app.function(
+    image=image,
+    secrets=secrets,
+    volumes={VOLUME_PATH: volume},
+    schedule=modal.Cron("0 2 * * *"),  # Run daily at 2 AM UTC
+)
+def scheduled_tlc_update():
+    """
+    Scheduled function that updates TLC vehicle data nightly at 2 AM UTC.
+    """
+    from datetime import datetime
+
+    print(f"⏰ Scheduled TLC update triggered at {datetime.now()}")
+    result = update_tlc_data.remote()
+    print(f"✓ Scheduled TLC update complete: {result}")
+    return result
+
+
+@app.function(
+    image=image,
+    volumes={VOLUME_PATH: volume},
+)
+def list_tlc_csvs():
+    """List all TLC CSV files stored in the Modal volume."""
+    import os
+    from pathlib import Path
+
+    print("\n📁 TLC CSV Files:")
+    print(f"{'='*60}")
+
+    os.makedirs(TLC_PATH, exist_ok=True)
+
+    csvs = sorted([f for f in os.listdir(TLC_PATH) if f.endswith('.csv')]) if os.path.exists(TLC_PATH) else []
+
+    if csvs:
+        for csv_file in csvs:
+            path = Path(TLC_PATH) / csv_file
+            size_mb = path.stat().st_size / (1024 * 1024)
+            modified = path.stat().st_mtime
+            from datetime import datetime
+            modified_str = datetime.fromtimestamp(modified).strftime("%Y-%m-%d %H:%M:%S")
+
+            is_latest = " [LATEST]" if csv_file == "tlc_vehicles_latest.csv" else ""
+            print(f"   {csv_file}{is_latest}")
+            print(f"     Size: {size_mb:.2f} MB")
+            print(f"     Modified: {modified_str}")
+            print()
+    else:
+        print("   (no CSV files found)")
+
+    print(f"{'='*60}")
+    print(f"Total: {len(csvs)} CSV file(s)")
+
+    return {"csvs": csvs, "count": len(csvs)}
+
+
 @app.local_entrypoint()
 def main(
     command: str = "stats",
@@ -626,6 +735,8 @@ def main(
         modal run modal_app.py --command=list-images
         modal run modal_app.py --command=upload --file=path/to/image.jpg
         modal run modal_app.py --command=sync-images
+        modal run modal_app.py --command=update-tlc
+        modal run modal_app.py --command=list-tlc
     """
     import os
     from pathlib import Path
@@ -673,6 +784,11 @@ def main(
             print("✗ Error: --file is required for delete-image command")
             return
         delete_image.remote(file)
+    elif command == "update-tlc":
+        print("🔄 Updating TLC vehicle data...")
+        update_tlc_data.remote()
+    elif command == "list-tlc":
+        list_tlc_csvs.remote()
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: test, stats, post, list-images, upload, sync-images, delete-image")
+        print("Available commands: test, stats, post, list-images, upload, sync-images, delete-image, update-tlc, list-tlc")
