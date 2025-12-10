@@ -38,13 +38,9 @@ def plate_not_found(plate: str, suggestions: list[str] = None):
 
 def confirm_sighting(plate: str, vehicle_info: tuple, count: int):
     """Ask user to confirm the sighting."""
-    _, _, vin, make, model, year, color = vehicle_info[:7]
-
-    msg = f"Found it! {year} {make} {model}"
-    if color:
-        msg += f" ({color})"
-    msg += f"\n\nThis will be sighting #{count + 1} of this vehicle."
-    msg += f"\n\nReply YES to confirm or CANCEL to abort."
+    msg = "Found it! The plate matches one found in the TLC database."
+    msg += f"\n\nThis is sighting #{count + 1} of this vehicle."
+    msg += "\n\nReply YES to confirm or CANCEL to abort."
 
     return msg
 
