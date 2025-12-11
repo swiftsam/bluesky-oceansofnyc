@@ -8,7 +8,7 @@ Images are stored in a Modal volume for persistent access.
 import modal
 
 # Create Modal app
-app = modal.App("fisker-ocean-bot")
+app = modal.App("oceans-of-nyc")
 
 # Define the container image with all dependencies and source code
 image = (
@@ -39,7 +39,7 @@ secrets = [
 ]
 
 # Create a persistent volume for images and maps
-volume = modal.Volume.from_name("fisker-ocean-data", create_if_missing=True)
+volume = modal.Volume.from_name("oceans-of-nyc", create_if_missing=True)
 VOLUME_PATH = "/data"
 IMAGES_PATH = f"{VOLUME_PATH}/images"
 MAPS_PATH = f"{VOLUME_PATH}/maps"

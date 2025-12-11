@@ -1,9 +1,9 @@
 [project]
-name = "bluesky-oceansofnyc"
+name = "oceans-of-nyc"
 version = "0.1.0"
-description = "Fisker Ocean spotter Bluesky Bot"
+description = "A community scavenger hunt to spot all the Fisker Oceans operating in NYC"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "pillow>=10.0.0",
     "requests>=2.31.0",
@@ -11,12 +11,16 @@ dependencies = [
     "atproto>=0.0.55",
     "python-dotenv>=1.0.0",
     "staticmap>=0.5.7",
-    "psycopg2-binary>=2.9.11",
+    "psycopg2-binary>=2.9.10",
     "modal>=1.2.4",
 ]
 
 [project.scripts]
 ocean-bot = "main:cli"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["post", "chat", "data", "process", "database", "validate", "geolocate"]
