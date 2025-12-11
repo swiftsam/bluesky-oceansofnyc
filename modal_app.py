@@ -52,7 +52,7 @@ TLC_PATH = f"{VOLUME_PATH}/tlc"
     volumes={VOLUME_PATH: volume},
     timeout=600,  # 10 minutes max
 )
-def batch_post(limit: int = 5, dry_run: bool = False):
+def post_single_sighting(limit: int = 5, dry_run: bool = False):
     """
     Post unposted sightings to Bluesky with images.
 
@@ -236,7 +236,7 @@ def batch_post(limit: int = 5, dry_run: bool = False):
     secrets=secrets,
     volumes={VOLUME_PATH: volume}
 )
-def multi_post(batch_size: int = 4, dry_run: bool = False):
+def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
     """
     Post multiple sightings in a single batch post.
 
@@ -332,35 +332,19 @@ def multi_post(batch_size: int = 4, dry_run: bool = False):
 
 @app.function(
     image=image,
-    secrets=secrets
+    secrets=secrets,
+    schedule=modal.Cron("0 22 * * *"),  # Run daily at 6 PM ET (10 PM UTC)
 )
-def scheduled_batch_post():
+def post_sightings_queue():
     """
-    Scheduled function that runs batch posting every 6 hours.
-    Posts up to 3 sightings per run.
-    """
-    from datetime import datetime
-
-    print(f"⏰ Scheduled batch post triggered at {datetime.now()}")
-    result = batch_post.remote(limit=3, dry_run=False)
-    print(f"✓ Scheduled post complete: {result}")
-    return result
-
-
-@app.function(
-    image=image,
-    secrets=secrets
-)
-def scheduled_multi_post():
-    """
-    Scheduled function that runs multi-posting.
+    Scheduled function that runs daily at 6 PM ET.
     Posts up to 4 sightings in a single batch post.
     """
     from datetime import datetime
 
-    print(f"⏰ Scheduled multi-post triggered at {datetime.now()}")
-    result = multi_post.remote(batch_size=4, dry_run=False)
-    print(f"✓ Scheduled multi-post complete: {result}")
+    print(f"⏰ Scheduled sightings queue post triggered at {datetime.now()}")
+    result = post_multiple_sightings.remote(batch_size=4, dry_run=False)
+    print(f"✓ Scheduled post complete: {result}")
     return result
 
 
@@ -393,7 +377,7 @@ def get_stats():
 
 
 @app.function(image=image)
-def test_connection():
+def get_hello():
     """Test basic connectivity without secrets."""
     import sys
 
@@ -433,54 +417,6 @@ def test_connection():
     image=image,
     volumes={VOLUME_PATH: volume},
 )
-def list_images():
-    """List all images stored in the Modal volume."""
-    import os
-
-    print("\n📁 Volume Contents:")
-    print(f"{'='*60}")
-
-    # Ensure directories exist
-    os.makedirs(IMAGES_PATH, exist_ok=True)
-    os.makedirs(MAPS_PATH, exist_ok=True)
-
-    # List sighting images
-    print(f"\n📸 Sighting Images ({IMAGES_PATH}):")
-    images = sorted(os.listdir(IMAGES_PATH)) if os.path.exists(IMAGES_PATH) else []
-    if images:
-        for img in images:
-            path = f"{IMAGES_PATH}/{img}"
-            size = os.path.getsize(path)
-            print(f"   {img} ({size / 1024:.1f} KB)")
-    else:
-        print("   (empty)")
-
-    # List map images
-    print(f"\n🗺 Map Images ({MAPS_PATH}):")
-    maps = sorted(os.listdir(MAPS_PATH)) if os.path.exists(MAPS_PATH) else []
-    if maps:
-        for m in maps:
-            path = f"{MAPS_PATH}/{m}"
-            size = os.path.getsize(path)
-            print(f"   {m} ({size / 1024:.1f} KB)")
-    else:
-        print("   (empty)")
-
-    print(f"\n{'='*60}")
-    print(f"Total: {len(images)} images, {len(maps)} maps")
-
-    return {
-        "images": images,
-        "maps": maps,
-        "image_count": len(images),
-        "map_count": len(maps),
-    }
-
-
-@app.function(
-    image=image,
-    volumes={VOLUME_PATH: volume},
-)
 def upload_image(filename: str, image_data: bytes):
     """
     Upload an image to the Modal volume.
@@ -505,25 +441,6 @@ def upload_image(filename: str, image_data: bytes):
     return {"filename": filename, "size_kb": size, "path": file_path}
 
 
-@app.function(
-    image=image,
-    volumes={VOLUME_PATH: volume},
-)
-def delete_image(filename: str):
-    """Delete an image from the Modal volume."""
-    import os
-
-    file_path = f"{IMAGES_PATH}/{filename}"
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        volume.commit()
-        print(f"✓ Deleted {filename}")
-        return {"deleted": True, "filename": filename}
-    else:
-        print(f"✗ File not found: {filename}")
-        return {"deleted": False, "filename": filename}
-
-
 # ==================== Twilio SMS/MMS Webhook ====================
 
 @app.function(
@@ -535,12 +452,12 @@ def delete_image(filename: str):
     volumes={VOLUME_PATH: volume},
 )
 @modal.asgi_app()
-def sms_webhook():
+def chat_sms_webhook():
     """
     Twilio SMS/MMS webhook endpoint.
 
     Configure this URL in your Twilio phone number settings:
-    https://wallabout--fisker-ocean-bot-sms-webhook.modal.run
+    https://wallabout--fisker-ocean-bot-chat-sms-webhook.modal.run
 
     Twilio sends POST requests with form-encoded data including:
     - From: Sender phone number
@@ -616,15 +533,15 @@ def sms_webhook():
     image=image,
     secrets=secrets,
     volumes={VOLUME_PATH: volume},
-    timeout=300, 
-    schedule=modal.Cron("0 7 * * *"),  # Run daily at ~2 AM ET
+    timeout=300,
+    schedule=modal.Cron("0 7 * * *"),  # Run daily at 3 AM ET (7 AM UTC)
 )
-def update_tlc_data():
+def update_tlc_vehicles():
     """
     Download latest TLC vehicle data from NYC Open Data and update the database.
     Stores versioned CSVs in Modal volume and filters to Fisker vehicles only.
 
-    Runs automatically every day at 2 AM ET.
+    Runs automatically every day at 3 AM ET.
     Can also be triggered manually via: modal run modal_app.py --command=update-tlc
     """
     import os
@@ -666,44 +583,6 @@ def update_tlc_data():
         }
 
 
-@app.function(
-    image=image,
-    volumes={VOLUME_PATH: volume},
-)
-def list_tlc_csvs():
-    """List all TLC CSV files stored in the Modal volume."""
-    import os
-    from pathlib import Path
-
-    print("\n📁 TLC CSV Files:")
-    print(f"{'='*60}")
-
-    os.makedirs(TLC_PATH, exist_ok=True)
-
-    csvs = sorted([f for f in os.listdir(TLC_PATH) if f.endswith('.csv')]) if os.path.exists(TLC_PATH) else []
-
-    if csvs:
-        for csv_file in csvs:
-            path = Path(TLC_PATH) / csv_file
-            size_mb = path.stat().st_size / (1024 * 1024)
-            modified = path.stat().st_mtime
-            from datetime import datetime
-            modified_str = datetime.fromtimestamp(modified).strftime("%Y-%m-%d %H:%M:%S")
-
-            is_latest = " [LATEST]" if csv_file == "tlc_vehicles_latest.csv" else ""
-            print(f"   {csv_file}{is_latest}")
-            print(f"     Size: {size_mb:.2f} MB")
-            print(f"     Modified: {modified_str}")
-            print()
-    else:
-        print("   (no CSV files found)")
-
-    print(f"{'='*60}")
-    print(f"Total: {len(csvs)} CSV file(s)")
-
-    return {"csvs": csvs, "count": len(csvs)}
-
-
 @app.local_entrypoint()
 def main(
     command: str = "stats",
@@ -718,24 +597,20 @@ def main(
         modal run modal_app.py --command=test
         modal run modal_app.py --command=stats
         modal run modal_app.py --command=post --limit=3 --dry-run=true
-        modal run modal_app.py --command=list-images
         modal run modal_app.py --command=upload --file=path/to/image.jpg
         modal run modal_app.py --command=sync-images
         modal run modal_app.py --command=update-tlc
-        modal run modal_app.py --command=list-tlc
     """
     import os
     from pathlib import Path
 
     if command == "test":
-        result = test_connection.remote()
+        result = get_hello.remote()
         print(f"\nTest result: {result}")
     elif command == "stats":
         get_stats.remote()
     elif command == "post":
-        batch_post.remote(limit=limit, dry_run=dry_run)
-    elif command == "list-images":
-        list_images.remote()
+        post_single_sighting.remote(limit=limit, dry_run=dry_run)
     elif command == "upload":
         if not file:
             print("✗ Error: --file is required for upload command")
@@ -765,16 +640,9 @@ def main(
             upload_image.remote(img_path.name, image_data)
 
         print(f"\n✓ Synced {len(image_files)} images to Modal volume")
-    elif command == "delete-image":
-        if not file:
-            print("✗ Error: --file is required for delete-image command")
-            return
-        delete_image.remote(file)
     elif command == "update-tlc":
         print("🔄 Updating TLC vehicle data...")
-        update_tlc_data.remote()
-    elif command == "list-tlc":
-        list_tlc_csvs.remote()
+        update_tlc_vehicles.remote()
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: test, stats, post, list-images, upload, sync-images, delete-image, update-tlc, list-tlc")
+        print("Available commands: test, stats, post, upload, sync-images, update-tlc")
