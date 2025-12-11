@@ -616,12 +616,16 @@ def sms_webhook():
     image=image,
     secrets=secrets,
     volumes={VOLUME_PATH: volume},
-    timeout=1800,  # 30 minutes for large CSV download and processing
+    timeout=300, 
+    schedule=modal.Cron("0 7 * * *"),  # Run daily at ~2 AM ET
 )
 def update_tlc_data():
     """
     Download latest TLC vehicle data from NYC Open Data and update the database.
     Stores versioned CSVs in Modal volume and filters to Fisker vehicles only.
+
+    Runs automatically every day at 2 AM ET.
+    Can also be triggered manually via: modal run modal_app.py --command=update-tlc
     """
     import os
     from datetime import datetime
@@ -660,24 +664,6 @@ def update_tlc_data():
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
-
-
-@app.function(
-    image=image,
-    secrets=secrets,
-    volumes={VOLUME_PATH: volume},
-    schedule=modal.Cron("0 2 * * *"),  # Run daily at 2 AM UTC
-)
-def scheduled_tlc_update():
-    """
-    Scheduled function that updates TLC vehicle data nightly at 2 AM UTC.
-    """
-    from datetime import datetime
-
-    print(f"⏰ Scheduled TLC update triggered at {datetime.now()}")
-    result = update_tlc_data.remote()
-    print(f"✓ Scheduled TLC update complete: {result}")
-    return result
 
 
 @app.function(
