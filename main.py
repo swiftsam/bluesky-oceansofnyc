@@ -454,7 +454,7 @@ def batch_process(images_dir: str, preview: bool):
 
             # Prompt for license plate with validation loop
             while True:
-                license_plate = click.prompt("Enter license plate (or 's' to skip, 'u' for unreadable, 'q' to quit)")
+                license_plate = click.prompt("Enter license plate (or 's' to skip, 'q' to quit)")
 
                 if license_plate.lower() == 'q':
                     click.echo("Batch processing cancelled.")
@@ -462,11 +462,6 @@ def batch_process(images_dir: str, preview: bool):
 
                 if license_plate.lower() == 's':
                     click.echo("Skipping this image.\n")
-                    break
-
-                if license_plate.lower() == 'u':
-                    click.echo("Marking plate as unreadable.\n")
-                    license_plate = None
                     break
 
                 license_plate = license_plate.upper()
@@ -580,12 +575,9 @@ def batch_process(images_dir: str, preview: bool):
 
                 click.echo(f"✓ Sighting saved to database (ID: {sighting_id})")
 
-                # Show sighting count only for readable plates
-                if license_plate:
-                    sighting_count = db.get_sighting_count(license_plate)
-                    click.echo(f"  - This is sighting #{sighting_count} for {license_plate}")
-                else:
-                    click.echo(f"  - Plate marked as unreadable (will not be posted)")
+                # Show sighting count
+                sighting_count = db.get_sighting_count(license_plate)
+                click.echo(f"  - This is sighting #{sighting_count} for {license_plate}")
 
                 # Generate map only if GPS data is available
                 if metadata['latitude'] and metadata['longitude']:
@@ -598,11 +590,7 @@ def batch_process(images_dir: str, preview: bool):
                     )
                     click.echo(f"✓ Map saved to: {map_path}")
 
-                # Only show "ready to post" message for readable plates
-                if license_plate:
-                    click.echo(f"✓ Sighting ready to post (use batch-post command)\n")
-                else:
-                    click.echo(f"✓ Sighting saved (unreadable plates are not posted)\n")
+                click.echo(f"✓ Sighting ready to post (use batch-post command)\n")
 
             except Exception as e:
                 click.echo(f"Unexpected error: {e}", err=True)

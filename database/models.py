@@ -129,7 +129,7 @@ class SightingsDatabase:
 
     def add_sighting(
         self,
-        license_plate: str | None,
+        license_plate: str,
         timestamp: str,
         latitude: float | None,
         longitude: float | None,
@@ -140,7 +140,7 @@ class SightingsDatabase:
         Add a new sighting to the database.
 
         Args:
-            license_plate: License plate number (or None if unreadable)
+            license_plate: License plate number (required)
             timestamp: ISO timestamp of sighting
             latitude: GPS latitude (or None)
             longitude: GPS longitude (or None)
@@ -234,7 +234,7 @@ class SightingsDatabase:
 
     def get_unposted_sightings(self):
         """
-        Get all sightings that haven't been posted yet (excludes unreadable plates).
+        Get all sightings that haven't been posted yet.
 
         Returns tuples with contributor info:
         (id, license_plate, timestamp, latitude, longitude, image_path, created_at, post_uri,
@@ -250,7 +250,6 @@ class SightingsDatabase:
             FROM sightings s
             LEFT JOIN contributors c ON s.contributor_id = c.id
             WHERE s.post_uri IS NULL
-            AND s.license_plate IS NOT NULL
             ORDER BY s.timestamp ASC
         """)
 
@@ -303,22 +302,22 @@ class SightingsDatabase:
     # ==================== Statistics ====================
 
     def get_unique_sighted_count(self) -> int:
-        """Get the count of unique license plates that have been sighted (excludes unreadable plates)."""
+        """Get the count of unique license plates that have been sighted."""
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT COUNT(DISTINCT license_plate) FROM sightings WHERE license_plate IS NOT NULL")
+        cursor.execute("SELECT COUNT(DISTINCT license_plate) FROM sightings")
         count = cursor.fetchone()[0]
         conn.close()
 
         return count
 
     def get_unique_posted_count(self) -> int:
-        """Get the count of unique license plates that have been posted (excludes unreadable plates)."""
+        """Get the count of unique license plates that have been posted."""
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT COUNT(DISTINCT license_plate) FROM sightings WHERE post_uri IS NOT NULL AND license_plate IS NOT NULL")
+        cursor.execute("SELECT COUNT(DISTINCT license_plate) FROM sightings WHERE post_uri IS NOT NULL")
         count = cursor.fetchone()[0]
         conn.close()
 
