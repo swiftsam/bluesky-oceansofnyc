@@ -1,10 +1,9 @@
 """License plate matching and validation."""
 
-from typing import Optional
 from .tlc import TLCDatabase
 
 
-def validate_plate(plate: str, db_url: str = None) -> tuple[bool, Optional[tuple]]:
+def validate_plate(plate: str, db_url: str = None) -> tuple[bool, tuple | None]:
     """
     Validate a license plate against the TLC database.
 
@@ -23,7 +22,9 @@ def validate_plate(plate: str, db_url: str = None) -> tuple[bool, Optional[tuple
     return False, None
 
 
-def get_potential_matches(partial_plate: str, db_url: str = None, max_results: int = 10) -> list[str]:
+def get_potential_matches(
+    partial_plate: str, db_url: str = None, max_results: int = 10
+) -> list[str]:
     """
     Get potential plate matches for a partial or unclear plate.
 
@@ -71,7 +72,9 @@ def find_similar_plates(plate: str, db_url: str = None, max_results: int = 5) ->
             continue
 
         # Count differing characters
-        diff_count = sum(1 for a, b in zip(plate.upper(), candidate.upper()) if a != b)
+        diff_count = sum(
+            1 for a, b in zip(plate.upper(), candidate.upper(), strict=False) if a != b
+        )
 
         # Only include plates with 1-2 character differences
         if 0 < diff_count <= 2:

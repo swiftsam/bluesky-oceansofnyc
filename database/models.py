@@ -1,16 +1,17 @@
 """Core database operations for sightings."""
 
-import psycopg2
-import psycopg2.extras
 import os
 from datetime import datetime
+
+import psycopg2
+import psycopg2.extras
 
 
 class SightingsDatabase:
     """Database operations for Fisker Ocean sightings."""
 
     def __init__(self, db_url: str = None):
-        self.db_url = db_url or os.getenv('DATABASE_URL')
+        self.db_url = db_url or os.getenv("DATABASE_URL")
         if not self.db_url:
             raise ValueError("DATABASE_URL not provided and not found in environment")
         self.init_database()
@@ -26,7 +27,9 @@ class SightingsDatabase:
 
     # ==================== Contributor Operations ====================
 
-    def get_or_create_contributor(self, phone_number: str = None, bluesky_handle: str = None) -> int:
+    def get_or_create_contributor(
+        self, phone_number: str = None, bluesky_handle: str = None
+    ) -> int:
         """
         Get or create a contributor by phone number or Bluesky handle.
 
@@ -43,9 +46,13 @@ class SightingsDatabase:
         try:
             # Try to find existing contributor
             if phone_number:
-                cursor.execute("SELECT id FROM contributors WHERE phone_number = %s", (phone_number,))
+                cursor.execute(
+                    "SELECT id FROM contributors WHERE phone_number = %s", (phone_number,)
+                )
             elif bluesky_handle:
-                cursor.execute("SELECT id FROM contributors WHERE bluesky_handle = %s", (bluesky_handle,))
+                cursor.execute(
+                    "SELECT id FROM contributors WHERE bluesky_handle = %s", (bluesky_handle,)
+                )
             else:
                 raise ValueError("Either phone_number or bluesky_handle must be provided")
 
@@ -55,11 +62,14 @@ class SightingsDatabase:
                 return result[0]
 
             # Create new contributor
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO contributors (phone_number, bluesky_handle)
                 VALUES (%s, %s)
                 RETURNING id
-            """, (phone_number, bluesky_handle))
+            """,
+                (phone_number, bluesky_handle),
+            )
 
             contributor_id = cursor.fetchone()[0]
             conn.commit()
@@ -68,7 +78,9 @@ class SightingsDatabase:
         finally:
             conn.close()
 
-    def get_contributor(self, phone_number: str = None, bluesky_handle: str = None, contributor_id: int = None):
+    def get_contributor(
+        self, phone_number: str = None, bluesky_handle: str = None, contributor_id: int = None
+    ):
         """Get contributor by phone number, handle, or ID."""
         conn = self._get_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -77,9 +89,13 @@ class SightingsDatabase:
             if contributor_id:
                 cursor.execute("SELECT * FROM contributors WHERE id = %s", (contributor_id,))
             elif phone_number:
-                cursor.execute("SELECT * FROM contributors WHERE phone_number = %s", (phone_number,))
+                cursor.execute(
+                    "SELECT * FROM contributors WHERE phone_number = %s", (phone_number,)
+                )
             elif bluesky_handle:
-                cursor.execute("SELECT * FROM contributors WHERE bluesky_handle = %s", (bluesky_handle,))
+                cursor.execute(
+                    "SELECT * FROM contributors WHERE bluesky_handle = %s", (bluesky_handle,)
+                )
             else:
                 raise ValueError("Must provide contributor_id, phone_number, or bluesky_handle")
 
@@ -94,9 +110,12 @@ class SightingsDatabase:
         cursor = conn.cursor()
 
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE contributors SET preferred_name = %s WHERE id = %s
-            """, (preferred_name, contributor_id))
+            """,
+                (preferred_name, contributor_id),
+            )
 
             conn.commit()
 
@@ -116,11 +135,11 @@ class SightingsDatabase:
         if not contributor:
             return None
 
-        if contributor['preferred_name']:
-            return contributor['preferred_name']
+        if contributor["preferred_name"]:
+            return contributor["preferred_name"]
 
-        if contributor['bluesky_handle']:
-            return contributor['bluesky_handle']
+        if contributor["bluesky_handle"]:
+            return contributor["bluesky_handle"]
 
         # Phone number only - return None (will be shown as anonymous)
         return None
@@ -134,7 +153,7 @@ class SightingsDatabase:
         latitude: float | None,
         longitude: float | None,
         image_path: str,
-        contributor_id: int
+        contributor_id: int,
     ):
         """
         Add a new sighting to the database.
@@ -159,17 +178,28 @@ class SightingsDatabase:
         created_at = datetime.now().isoformat()
 
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id))
+            """,
+                (
+                    license_plate,
+                    timestamp,
+                    latitude,
+                    longitude,
+                    image_path,
+                    created_at,
+                    contributor_id,
+                ),
+            )
 
             sighting_id = cursor.fetchone()[0]
             conn.commit()
             return sighting_id
 
-        except psycopg2.errors.UniqueViolation as e:
+        except psycopg2.errors.UniqueViolation:
             conn.rollback()
             # Image already exists - this is expected behavior
             return None
@@ -192,9 +222,12 @@ class SightingsDatabase:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM sightings WHERE license_plate = %s
-        """, (license_plate,))
+        """,
+            (license_plate,),
+        )
 
         count = cursor.fetchone()[0]
         conn.close()
@@ -206,9 +239,12 @@ class SightingsDatabase:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM sightings WHERE license_plate = %s AND post_uri IS NOT NULL
-        """, (license_plate,))
+        """,
+            (license_plate,),
+        )
 
         count = cursor.fetchone()[0]
         conn.close()
@@ -221,9 +257,12 @@ class SightingsDatabase:
         cursor = conn.cursor()
 
         if license_plate:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM sightings WHERE license_plate = %s ORDER BY timestamp DESC
-            """, (license_plate,))
+            """,
+                (license_plate,),
+            )
         else:
             cursor.execute("SELECT * FROM sightings ORDER BY timestamp DESC")
 
@@ -269,10 +308,13 @@ class SightingsDatabase:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE sightings SET post_uri = %s
             WHERE id = %s
-        """, (post_uri, sighting_id))
+        """,
+            (post_uri, sighting_id),
+        )
 
         conn.commit()
         conn.close()
@@ -291,10 +333,13 @@ class SightingsDatabase:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE sightings SET post_uri = %s
             WHERE id = ANY(%s)
-        """, (post_uri, sighting_ids))
+        """,
+            (post_uri, sighting_ids),
+        )
 
         conn.commit()
         conn.close()
@@ -317,7 +362,9 @@ class SightingsDatabase:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT COUNT(DISTINCT license_plate) FROM sightings WHERE post_uri IS NOT NULL")
+        cursor.execute(
+            "SELECT COUNT(DISTINCT license_plate) FROM sightings WHERE post_uri IS NOT NULL"
+        )
         count = cursor.fetchone()[0]
         conn.close()
 
@@ -342,9 +389,12 @@ class SightingsDatabase:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT * FROM tlc_vehicles WHERE dmv_license_plate_number = %s
-        """, (license_plate,))
+        """,
+            (license_plate,),
+        )
 
         vehicle = cursor.fetchone()
         conn.close()
@@ -366,15 +416,18 @@ class SightingsDatabase:
         cursor = conn.cursor()
 
         # Convert * to SQL wildcard _
-        sql_pattern = pattern.replace('*', '_')
+        sql_pattern = pattern.replace("*", "_")
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT dmv_license_plate_number, vehicle_vin_number, vehicle_year,
                    name, base_name, base_type
             FROM tlc_vehicles
             WHERE dmv_license_plate_number LIKE %s
             ORDER BY dmv_license_plate_number
-        """, (sql_pattern,))
+        """,
+            (sql_pattern,),
+        )
 
         results = cursor.fetchall()
         conn.close()
@@ -387,6 +440,7 @@ class SightingsDatabase:
         Delegates to validate.tlc.TLCDatabase for implementation.
         """
         from validate.tlc import TLCDatabase
+
         tlc_db = TLCDatabase(self.db_url)
         return tlc_db.import_tlc_data(csv_path)
 
@@ -396,5 +450,6 @@ class SightingsDatabase:
         Delegates to validate.tlc.TLCDatabase for implementation.
         """
         from validate.tlc import TLCDatabase
+
         tlc_db = TLCDatabase(self.db_url)
         return tlc_db.filter_fisker_vehicles()

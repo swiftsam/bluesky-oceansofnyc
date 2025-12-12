@@ -2,7 +2,7 @@
 
 import os
 from datetime import datetime
-from typing import Optional
+
 import psycopg2
 
 
@@ -16,7 +16,7 @@ class ChatSession:
     AWAITING_CONFIRMATION = "awaiting_confirmation"
     AWAITING_NAME = "awaiting_name"
 
-    def __init__(self, phone_number: str, db_url: Optional[str] = None):
+    def __init__(self, phone_number: str, db_url: str | None = None):
         self.phone_number = phone_number
         self.db_url = db_url or os.getenv("DATABASE_URL")
         self._data = None
@@ -30,14 +30,13 @@ class ChatSession:
             with conn.cursor() as cur:
                 # Try to get existing session
                 cur.execute(
-                    "SELECT * FROM chat_sessions WHERE phone_number = %s",
-                    (self.phone_number,)
+                    "SELECT * FROM chat_sessions WHERE phone_number = %s", (self.phone_number,)
                 )
                 row = cur.fetchone()
 
                 if row:
                     cols = [desc[0] for desc in cur.description]
-                    self._data = dict(zip(cols, row))
+                    self._data = dict(zip(cols, row, strict=False))
                 else:
                     # Create new session
                     cur.execute(
@@ -46,23 +45,23 @@ class ChatSession:
                         VALUES (%s, %s)
                         RETURNING *
                         """,
-                        (self.phone_number, self.IDLE)
+                        (self.phone_number, self.IDLE),
                     )
                     row = cur.fetchone()
                     cols = [desc[0] for desc in cur.description]
-                    self._data = dict(zip(cols, row))
+                    self._data = dict(zip(cols, row, strict=False))
                     conn.commit()
 
         return self._data
 
     def update(
         self,
-        state: Optional[str] = None,
-        pending_image_path: Optional[str] = None,
-        pending_plate: Optional[str] = None,
-        pending_latitude: Optional[float] = None,
-        pending_longitude: Optional[float] = None,
-        pending_timestamp: Optional[datetime] = None,
+        state: str | None = None,
+        pending_image_path: str | None = None,
+        pending_plate: str | None = None,
+        pending_latitude: float | None = None,
+        pending_longitude: float | None = None,
+        pending_timestamp: datetime | None = None,
     ):
         """Update session state."""
         updates = []
@@ -106,7 +105,7 @@ class ChatSession:
                 row = cur.fetchone()
                 if row:
                     cols = [desc[0] for desc in cur.description]
-                    self._data = dict(zip(cols, row))
+                    self._data = dict(zip(cols, row, strict=False))
                 conn.commit()
 
     def reset(self):

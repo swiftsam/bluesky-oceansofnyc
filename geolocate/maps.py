@@ -1,7 +1,8 @@
 """Map generation using OpenStreetMap tiles via staticmap."""
 
 from pathlib import Path
-from staticmap import StaticMap, CircleMarker
+
+from staticmap import CircleMarker, StaticMap
 
 
 class MapGenerator:
@@ -24,7 +25,7 @@ class MapGenerator:
         zoom: int = 15,
         width: int = 600,
         height: int = 400,
-        output_path: str = None
+        output_path: str = None,
     ) -> str:
         """
         Generate a static map image centered on the given coordinates.
@@ -46,7 +47,7 @@ class MapGenerator:
         m = StaticMap(width, height)
 
         # Add a marker at the location
-        marker = CircleMarker((longitude, latitude), 'red', 12)
+        marker = CircleMarker((longitude, latitude), "red", 12)
         m.add_marker(marker)
 
         # Determine output path
@@ -62,12 +63,7 @@ class MapGenerator:
 
         return str(output_path)
 
-    def generate_sighting_map(
-        self,
-        latitude: float,
-        longitude: float,
-        license_plate: str
-    ) -> str:
+    def generate_sighting_map(self, latitude: float, longitude: float, license_plate: str) -> str:
         """
         Generate a map image for a sighting.
 
@@ -93,7 +89,7 @@ class MapGenerator:
             zoom=16,  # Good detail level for city streets
             width=800,
             height=600,
-            output_path=str(output_path)
+            output_path=str(output_path),
         )
 
 
@@ -117,5 +113,5 @@ def generate_map(latitude: float, longitude: float, output_path: str) -> str:
         zoom=16,
         width=800,
         height=600,
-        output_path=output_path
+        output_path=output_path,
     )

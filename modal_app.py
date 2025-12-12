@@ -61,13 +61,13 @@ def post_single_sighting(limit: int = 5, dry_run: bool = False):
         dry_run: If True, only show what would be posted without actually posting
     """
     import os
+    import time
     from datetime import datetime
     from pathlib import Path
-    import time
 
     from database import SightingsDatabase
+    from geolocate import generate_map, reverse_geocode
     from post.bluesky import BlueskyClient
-    from geolocate import reverse_geocode, generate_map
 
     print(f"🚀 Starting batch post (limit: {limit}, dry_run: {dry_run})")
 
@@ -171,7 +171,7 @@ def post_single_sighting(limit: int = 5, dry_run: bool = False):
 
                 if not os.path.exists(map_path):
                     try:
-                        print(f"🗺 Generating map...")
+                        print("🗺 Generating map...")
                         generate_map(latitude, longitude, map_path)
                         volume.commit()  # Persist the map to volume
                         print(f"✓ Map generated: {map_filename}")
@@ -193,9 +193,7 @@ def post_single_sighting(limit: int = 5, dry_run: bool = False):
                 if images_to_post:
                     print(f"📸 Posting with {len(images_to_post)} image(s)")
                     response = client.create_post(
-                        post_text,
-                        images=images_to_post,
-                        image_alts=image_alts
+                        post_text, images=images_to_post, image_alts=image_alts
                     )
                 else:
                     print("📝 Posting text only (no images available)")
@@ -217,6 +215,7 @@ def post_single_sighting(limit: int = 5, dry_run: bool = False):
         except Exception as e:
             print(f"✗ Error posting sighting {sighting_id}: {e}")
             import traceback
+
             traceback.print_exc()
             continue
 
@@ -231,11 +230,7 @@ def post_single_sighting(limit: int = 5, dry_run: bool = False):
     }
 
 
-@app.function(
-    image=image,
-    secrets=secrets,
-    volumes={VOLUME_PATH: volume}
-)
+@app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume})
 def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
     """
     Post multiple sightings in a single batch post.
@@ -245,6 +240,7 @@ def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
         dry_run: If True, only show what would be posted without actually posting
     """
     import os
+
     from database import SightingsDatabase
     from post.bluesky import BlueskyClient
 
@@ -279,7 +275,7 @@ def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
     plates = [s[1] for s in sightings_to_post]
     contributors = set(s[9] for s in sightings_to_post if s[9])
 
-    print(f"\n📊 Batch Post Info:")
+    print("\n📊 Batch Post Info:")
     print(f"   Plates: {', '.join(plates)}")
     print(f"   Contributors: {len(contributors)}")
     print(f"   Progress: {unique_sighted}/{total_fiskers}")
@@ -290,16 +286,14 @@ def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
             "posted": 0,
             "message": f"Dry run: would post {len(sightings_to_post)} sightings",
             "plates": plates,
-            "contributors": len(contributors)
+            "contributors": len(contributors),
         }
 
     try:
         # Post to Bluesky
         client = BlueskyClient()
         response = client.create_batch_sighting_post(
-            sightings=sightings_to_post,
-            unique_sighted=unique_sighted,
-            total_fiskers=total_fiskers
+            sightings=sightings_to_post, unique_sighted=unique_sighted, total_fiskers=total_fiskers
         )
 
         # Mark all sightings as posted
@@ -307,7 +301,7 @@ def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
         post_uri = response.uri
         db.mark_batch_as_posted(sighting_ids, post_uri)
 
-        print(f"\n✓ Batch posted successfully!")
+        print("\n✓ Batch posted successfully!")
         print(f"  Post URI: {post_uri}")
         print(f"  Marked {len(sighting_ids)} sighting(s) as posted")
 
@@ -316,18 +310,15 @@ def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
             "post_uri": post_uri,
             "plates": plates,
             "contributors": len(contributors),
-            "message": f"Posted {len(sighting_ids)} sightings in batch"
+            "message": f"Posted {len(sighting_ids)} sightings in batch",
         }
 
     except Exception as e:
         print(f"❌ Error posting batch: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "posted": 0,
-            "error": str(e),
-            "message": f"Failed to post batch: {e}"
-        }
+        return {"posted": 0, "error": str(e), "message": f"Failed to post batch: {e}"}
 
 
 @app.function(
@@ -387,25 +378,21 @@ def get_hello():
 
     # Try importing our modules
     try:
-        from database import SightingsDatabase
         print("✓ database module imported successfully")
     except Exception as e:
         print(f"✗ Error importing database: {e}")
 
     try:
-        from post.bluesky import BlueskyClient
         print("✓ post.bluesky module imported successfully")
     except Exception as e:
         print(f"✗ Error importing post.bluesky: {e}")
 
     try:
-        from geolocate import reverse_geocode, generate_map
         print("✓ geolocate module imported successfully")
     except Exception as e:
         print(f"✗ Error importing geolocate: {e}")
 
     try:
-        from validate import TLCDatabase, validate_plate
         print("✓ validate module imported successfully")
     except Exception as e:
         print(f"✗ Error importing validate: {e}")
@@ -443,6 +430,7 @@ def upload_image(filename: str, image_data: bytes):
 
 # ==================== Twilio SMS/MMS Webhook ====================
 
+
 @app.function(
     image=image,
     secrets=[
@@ -468,13 +456,14 @@ def chat_sms_webhook():
     """
     from fastapi import FastAPI, Request
     from fastapi.responses import Response
+
     from chat.webhook import handle_incoming_sms, parse_twilio_request
 
     web_app = FastAPI()
 
     @web_app.post("/")
     async def handle_sms(request: Request):
-        print(f"📨 Received webhook request")
+        print("📨 Received webhook request")
 
         # Get the raw body from the request
         body = await request.body()
@@ -529,6 +518,7 @@ def chat_sms_webhook():
 
 # ==================== TLC Data Updates ====================
 
+
 @app.function(
     image=image,
     secrets=secrets,
@@ -546,6 +536,7 @@ def update_tlc_vehicles():
     """
     import os
     from datetime import datetime
+
     from validate.tlc import TLCDatabase
 
     print(f"🚀 Starting TLC data update at {datetime.now()}")
@@ -565,7 +556,7 @@ def update_tlc_vehicles():
         volume.commit()
 
         print(f"\n{'='*60}")
-        print(f"✓ TLC data update complete!")
+        print("✓ TLC data update complete!")
         print(f"  CSV: {result['csv_path']}")
         print(f"  Fisker vehicles: {result['fisker_count']:,}")
         print(f"  Timestamp: {result['timestamp']}")
@@ -576,11 +567,9 @@ def update_tlc_vehicles():
     except Exception as e:
         print(f"❌ Error updating TLC data: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
 
 
 @app.local_entrypoint()
@@ -627,10 +616,14 @@ def main(
         # Sync all images from local sightings directory
         local_images_dir = Path("sightings")
         if not local_images_dir.exists():
-            print(f"✗ Error: Local sightings directory not found")
+            print("✗ Error: Local sightings directory not found")
             return
 
-        image_files = list(local_images_dir.glob("*.jpg")) + list(local_images_dir.glob("*.jpeg")) + list(local_images_dir.glob("*.png"))
+        image_files = (
+            list(local_images_dir.glob("*.jpg"))
+            + list(local_images_dir.glob("*.jpeg"))
+            + list(local_images_dir.glob("*.png"))
+        )
         print(f"Found {len(image_files)} images to sync")
 
         for img_path in image_files:

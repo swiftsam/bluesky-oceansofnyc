@@ -15,6 +15,13 @@ dependencies = [
     "modal>=1.2.4",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.4",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.1",
+]
+
 [project.scripts]
 ocean-bot = "main:cli"
 
@@ -24,3 +31,57 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["post", "chat", "data", "process", "database", "validate", "geolocate"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Enable recommended rule sets
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "N",   # pep8-naming
+    "UP",  # pyupgrade (modernize syntax)
+    "B",   # flake8-bugbear (common bugs)
+    "A",   # flake8-builtins (shadowing builtins)
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "RET", # flake8-return
+    "ARG", # flake8-unused-arguments
+]
+
+# Ignore specific rules if needed (can enable these incrementally)
+ignore = [
+    "E501",  # line too long (formatter handles this)
+    "E731",  # lambda assignment (sometimes clearer than def)
+    "ARG001",  # unused function argument (common in callbacks/handlers)
+    "ARG002",  # unused method argument
+    "B904",  # raise from within except (can add later)
+    "SIM102",  # nested if simplification (readability preference)
+    "SIM108",  # ternary operator suggestion (readability preference)
+    "SIM117",  # nested with statements (readability preference)
+    "RET504",  # unnecessary assignment before return (sometimes clearer)
+    "C401",  # generator to comprehension (minor optimization)
+    "C414",  # unnecessary list() call (minor optimization)
+    "F841",  # unused local variable (can clean up later)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Allow unused imports in __init__.py files
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+
+# Start with basic strictness, can enable more later:
+# disallow_untyped_defs = true
+# disallow_any_generics = true
+# check_untyped_defs = true

@@ -1,12 +1,14 @@
-import click
 import subprocess
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
-from database import SightingsDatabase
-from exif_utils import extract_image_metadata, ExifDataError
+
+import click
 from bluesky_client import BlueskyClient
+from dotenv import load_dotenv
+from exif_utils import ExifDataError, extract_image_metadata
 from map_generator import MapGenerator
+
+from database import SightingsDatabase
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,8 +21,8 @@ def cli():
 
 
 @cli.command()
-@click.argument('image_path', type=click.Path(exists=True))
-@click.argument('license_plate')
+@click.argument("image_path", type=click.Path(exists=True))
+@click.argument("license_plate")
 def process(image_path: str, license_plate: str):
     """
     Process a Fisker Ocean sighting image and store it in the database.
@@ -35,7 +37,7 @@ def process(image_path: str, license_plate: str):
         db = SightingsDatabase()
 
         # Check if license plate contains wildcards
-        if '*' in license_plate:
+        if "*" in license_plate:
             click.echo(f"\nSearching for plates matching pattern: {license_plate}")
             results = db.search_plates_wildcard(license_plate.upper())
 
@@ -62,11 +64,10 @@ def process(image_path: str, license_plate: str):
                     raise click.Abort()
             else:
                 selection = click.prompt(
-                    f"Select plate number (1-{len(results)}) or 'q' to quit",
-                    type=str
+                    f"Select plate number (1-{len(results)}) or 'q' to quit", type=str
                 )
 
-                if selection.lower() == 'q':
+                if selection.lower() == "q":
                     click.echo("Operation cancelled.")
                     raise click.Abort()
 
@@ -83,7 +84,7 @@ def process(image_path: str, license_plate: str):
                     raise click.Abort()
 
         metadata = extract_image_metadata(image_path)
-        click.echo(f"\n✓ Extracted EXIF data:")
+        click.echo("\n✓ Extracted EXIF data:")
         click.echo(f"  - Timestamp: {metadata['timestamp']}")
         click.echo(f"  - Location: {metadata['latitude']}, {metadata['longitude']}")
 
@@ -92,11 +93,11 @@ def process(image_path: str, license_plate: str):
         # Use default contributor ID (1) for CLI-added sightings
         sighting_id = db.add_sighting(
             license_plate=license_plate,
-            timestamp=metadata['timestamp'],
-            latitude=metadata['latitude'],
-            longitude=metadata['longitude'],
+            timestamp=metadata["timestamp"],
+            latitude=metadata["latitude"],
+            longitude=metadata["longitude"],
             image_path=str(Path(image_path).absolute()),
-            contributor_id=1
+            contributor_id=1,
         )
 
         if sighting_id is None:
@@ -116,7 +117,7 @@ def process(image_path: str, license_plate: str):
 
 
 @cli.command()
-@click.option('--plate', help='Filter by license plate')
+@click.option("--plate", help="Filter by license plate")
 def list_sightings(plate: str = None):
     """List all sightings in the database."""
     db = SightingsDatabase()
@@ -140,7 +141,7 @@ def list_sightings(plate: str = None):
 
 
 @cli.command()
-@click.argument('csv_path', type=click.Path(exists=True))
+@click.argument("csv_path", type=click.Path(exists=True))
 def import_tlc(csv_path: str):
     """Import NYC TLC vehicle data from CSV file."""
     try:
@@ -158,7 +159,7 @@ def import_tlc(csv_path: str):
 
 
 @cli.command()
-@click.argument('license_plate')
+@click.argument("license_plate")
 def lookup_tlc(license_plate: str):
     """Look up NYC TLC vehicle information by license plate."""
     try:
@@ -195,14 +196,16 @@ def filter_fiskers():
         original_count = db.get_tlc_vehicle_count()
         click.echo(f"Current TLC vehicles in database: {original_count:,}")
 
-        if not click.confirm("Remove all non-Fisker vehicles? This will keep only vehicles with VINs starting with 'VCF1'"):
+        if not click.confirm(
+            "Remove all non-Fisker vehicles? This will keep only vehicles with VINs starting with 'VCF1'"
+        ):
             click.echo("Operation cancelled.")
             return
 
         fisker_count = db.filter_fisker_vehicles()
         removed = original_count - fisker_count
 
-        click.echo(f"✓ Filtered database to Fisker vehicles only")
+        click.echo("✓ Filtered database to Fisker vehicles only")
         click.echo(f"  - Fisker vehicles: {fisker_count:,}")
         click.echo(f"  - Removed: {removed:,}")
 
@@ -212,7 +215,7 @@ def filter_fiskers():
 
 
 @cli.command()
-@click.argument('pattern')
+@click.argument("pattern")
 def search_plate(pattern: str):
     """
     Search for license plates using wildcard pattern.
@@ -229,7 +232,7 @@ def search_plate(pattern: str):
             return
 
         click.echo(f"\nFound {len(results)} matching plate(s):\n")
-        click.echo("="*80)
+        click.echo("=" * 80)
 
         for result in results:
             plate, vin, year, owner, base_name, base_type = result
@@ -238,7 +241,7 @@ def search_plate(pattern: str):
             click.echo(f"  Year: {year}")
             click.echo(f"  Owner: {owner}")
             click.echo(f"  Base: {base_name} ({base_type})")
-            click.echo("="*80)
+            click.echo("=" * 80)
 
     except Exception as e:
         click.echo(f"Error searching plates: {e}", err=True)
@@ -246,13 +249,14 @@ def search_plate(pattern: str):
 
 
 @cli.command()
-@click.argument('sighting_id', type=int)
+@click.argument("sighting_id", type=int)
 def post(sighting_id: int):
     """Post a sighting to Bluesky by its database ID."""
     try:
         db = SightingsDatabase()
 
         import sqlite3
+
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
 
@@ -308,9 +312,7 @@ def post(sighting_id: int):
             click.echo("\nGenerating map image...")
             map_gen = MapGenerator()
             map_path = map_gen.generate_sighting_map(
-                latitude=latitude,
-                longitude=longitude,
-                license_plate=license_plate
+                latitude=latitude, longitude=longitude, license_plate=license_plate
             )
             click.echo(f"✓ Map saved to: {map_path}")
 
@@ -322,18 +324,18 @@ def post(sighting_id: int):
             longitude=longitude,
             unique_sighted=unique_sighted,
             total_fiskers=total_fiskers,
-            contributed_by=contributed_by
+            contributed_by=contributed_by,
         )
 
-        click.echo("\n" + "="*60)
+        click.echo("\n" + "=" * 60)
         click.echo("POST PREVIEW")
-        click.echo("="*60)
+        click.echo("=" * 60)
         click.echo(post_text)
-        click.echo(f"\nImages:")
+        click.echo("\nImages:")
         click.echo(f"  1. {image_path}")
         if map_path:
             click.echo(f"  2. {map_path}")
-        click.echo("="*60 + "\n")
+        click.echo("=" * 60 + "\n")
 
         if not click.confirm("Do you want to post this to Bluesky?"):
             click.echo("Post cancelled.")
@@ -355,18 +357,21 @@ def post(sighting_id: int):
             images=images,
             unique_sighted=unique_sighted,
             total_fiskers=total_fiskers,
-            contributed_by=contributed_by
+            contributed_by=contributed_by,
         )
 
         # Mark as posted
         db.mark_as_posted(sighting_id, response.uri)
 
-        click.echo(f"✓ Successfully posted to Bluesky!")
+        click.echo("✓ Successfully posted to Bluesky!")
         click.echo(f"  - Post URI: {response.uri}")
 
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
-        click.echo("\nMake sure to set BLUESKY_HANDLE and BLUESKY_PASSWORD environment variables.", err=True)
+        click.echo(
+            "\nMake sure to set BLUESKY_HANDLE and BLUESKY_PASSWORD environment variables.",
+            err=True,
+        )
         raise click.Abort()
     except Exception as e:
         click.echo(f"Unexpected error: {e}", err=True)
@@ -374,8 +379,10 @@ def post(sighting_id: int):
 
 
 @cli.command()
-@click.option('--images-dir', default='images', help='Directory containing images to process')
-@click.option('--preview', is_flag=True, help='Preview images that would be processed without processing them')
+@click.option("--images-dir", default="images", help="Directory containing images to process")
+@click.option(
+    "--preview", is_flag=True, help="Preview images that would be processed without processing them"
+)
 def batch_process(images_dir: str, preview: bool):
     """
     Batch process unprocessed images in the images directory.
@@ -397,11 +404,8 @@ def batch_process(images_dir: str, preview: bool):
             raise click.Abort()
 
         # Get all image files
-        image_extensions = {'.jpg', '.jpeg', '.png', '.gif'}
-        all_images = [
-            f for f in images_path.glob('*')
-            if f.suffix.lower() in image_extensions
-        ]
+        image_extensions = {".jpg", ".jpeg", ".png", ".gif"}
+        all_images = [f for f in images_path.glob("*") if f.suffix.lower() in image_extensions]
 
         if not all_images:
             click.echo(f"No images found in {images_dir}")
@@ -409,6 +413,7 @@ def batch_process(images_dir: str, preview: bool):
 
         # Get already processed images from database
         import sqlite3
+
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
         cursor.execute("SELECT image_path FROM sightings")
@@ -434,7 +439,9 @@ def batch_process(images_dir: str, preview: bool):
             click.echo(f"{'='*60}\n")
             return
 
-        click.echo(f"\nFound {len(unprocessed)} unprocessed image(s) out of {len(all_images)} total\n")
+        click.echo(
+            f"\nFound {len(unprocessed)} unprocessed image(s) out of {len(all_images)} total\n"
+        )
 
         for idx, image_path in enumerate(unprocessed, 1):
             click.echo(f"\n{'='*60}")
@@ -443,12 +450,12 @@ def batch_process(images_dir: str, preview: bool):
 
             # Open image for user to view
             try:
-                if sys.platform == 'darwin':  # macOS
-                    subprocess.run(['open', str(image_path)], check=True)
-                elif sys.platform == 'win32':  # Windows
-                    subprocess.run(['start', str(image_path)], shell=True, check=True)
+                if sys.platform == "darwin":  # macOS
+                    subprocess.run(["open", str(image_path)], check=True)
+                elif sys.platform == "win32":  # Windows
+                    subprocess.run(["start", str(image_path)], shell=True, check=True)
                 else:  # Linux
-                    subprocess.run(['xdg-open', str(image_path)], check=True)
+                    subprocess.run(["xdg-open", str(image_path)], check=True)
             except Exception as e:
                 click.echo(f"Warning: Could not open image: {e}")
 
@@ -456,18 +463,18 @@ def batch_process(images_dir: str, preview: bool):
             while True:
                 license_plate = click.prompt("Enter license plate (or 's' to skip, 'q' to quit)")
 
-                if license_plate.lower() == 'q':
+                if license_plate.lower() == "q":
                     click.echo("Batch processing cancelled.")
                     return
 
-                if license_plate.lower() == 's':
+                if license_plate.lower() == "s":
                     click.echo("Skipping this image.\n")
                     break
 
                 license_plate = license_plate.upper()
 
                 # Check if contains wildcards
-                if '*' in license_plate:
+                if "*" in license_plate:
                     click.echo(f"\nSearching for plates matching pattern: {license_plate}")
                     results = db.search_plates_wildcard(license_plate)
 
@@ -493,7 +500,7 @@ def batch_process(images_dir: str, preview: bool):
                         selection = click.prompt(
                             f"Select plate number (1-{len(results)}) or press Enter to re-enter",
                             type=str,
-                            default=''
+                            default="",
                         )
 
                         if not selection:
@@ -521,7 +528,7 @@ def batch_process(images_dir: str, preview: bool):
                 break
 
             # Skip if user chose to skip this image
-            if isinstance(license_plate, str) and license_plate.lower() == 's':
+            if isinstance(license_plate, str) and license_plate.lower() == "s":
                 continue
 
             # Extract EXIF and process
@@ -529,26 +536,28 @@ def batch_process(images_dir: str, preview: bool):
                 metadata = extract_image_metadata(str(image_path))
 
                 # Show what data we extracted
-                click.echo(f"\n✓ Extracted metadata:")
+                click.echo("\n✓ Extracted metadata:")
                 click.echo(f"  - Timestamp: {metadata['timestamp']}")
 
-                if metadata['latitude'] and metadata['longitude']:
+                if metadata["latitude"] and metadata["longitude"]:
                     click.echo(f"  - Location: {metadata['latitude']}, {metadata['longitude']}")
                 else:
-                    click.echo(f"  - Location: No GPS data available (using current time as timestamp)")
+                    click.echo(
+                        "  - Location: No GPS data available (using current time as timestamp)"
+                    )
 
                 # Prompt for optional contributor name
                 contributed_by = click.prompt(
                     "\nContributor name (optional, press Enter to skip)",
-                    default='',
-                    show_default=False
+                    default="",
+                    show_default=False,
                 )
 
                 # Get or create contributor
                 if contributed_by.strip():
                     contributed_by = contributed_by.strip()
                     # Check if it's a Bluesky handle
-                    if contributed_by.startswith('@'):
+                    if contributed_by.startswith("@"):
                         contributor_id = db.get_or_create_contributor(bluesky_handle=contributed_by)
                     else:
                         # For non-handle names, just use the default contributor
@@ -562,11 +571,11 @@ def batch_process(images_dir: str, preview: bool):
                 # Save to database
                 sighting_id = db.add_sighting(
                     license_plate=license_plate,
-                    timestamp=metadata['timestamp'],
-                    latitude=metadata['latitude'],
-                    longitude=metadata['longitude'],
+                    timestamp=metadata["timestamp"],
+                    latitude=metadata["latitude"],
+                    longitude=metadata["longitude"],
                     image_path=str(image_path.absolute()),
-                    contributor_id=contributor_id
+                    contributor_id=contributor_id,
                 )
 
                 if sighting_id is None:
@@ -580,17 +589,17 @@ def batch_process(images_dir: str, preview: bool):
                 click.echo(f"  - This is sighting #{sighting_count} for {license_plate}")
 
                 # Generate map only if GPS data is available
-                if metadata['latitude'] and metadata['longitude']:
+                if metadata["latitude"] and metadata["longitude"]:
                     click.echo("\nGenerating map image...")
                     map_gen = MapGenerator()
                     map_path = map_gen.generate_sighting_map(
-                        latitude=metadata['latitude'],
-                        longitude=metadata['longitude'],
-                        license_plate=license_plate
+                        latitude=metadata["latitude"],
+                        longitude=metadata["longitude"],
+                        license_plate=license_plate,
                     )
                     click.echo(f"✓ Map saved to: {map_path}")
 
-                click.echo(f"✓ Sighting ready to post (use batch-post command)\n")
+                click.echo("✓ Sighting ready to post (use batch-post command)\n")
 
             except Exception as e:
                 click.echo(f"Unexpected error: {e}", err=True)
@@ -607,8 +616,12 @@ def batch_process(images_dir: str, preview: bool):
 
 
 @cli.command()
-@click.option('--limit', type=int, default=None, help='Maximum number of sightings to post (default: all)')
-@click.option('--preview', is_flag=True, help='Preview sightings that would be posted without posting them')
+@click.option(
+    "--limit", type=int, default=None, help="Maximum number of sightings to post (default: all)"
+)
+@click.option(
+    "--preview", is_flag=True, help="Preview sightings that would be posted without posting them"
+)
 def batch_post(limit: int = None, preview: bool = False):
     """
     Post all unposted sightings from the database to Bluesky.
@@ -653,6 +666,7 @@ def batch_post(limit: int = None, preview: bool = False):
 
                 # Format timestamp
                 from datetime import datetime
+
                 dt = datetime.fromisoformat(timestamp)
                 formatted_time = dt.strftime("%B %d, %Y at %I:%M %p")
 
@@ -718,9 +732,7 @@ def batch_post(limit: int = None, preview: bool = False):
             if latitude is not None and longitude is not None:
                 map_gen = MapGenerator()
                 map_path = map_gen.generate_sighting_map(
-                    latitude=latitude,
-                    longitude=longitude,
-                    license_plate=license_plate
+                    latitude=latitude, longitude=longitude, license_plate=license_plate
                 )
 
             # Format post preview
@@ -733,17 +745,17 @@ def batch_post(limit: int = None, preview: bool = False):
                 longitude=longitude,
                 unique_sighted=unique_sighted,
                 total_fiskers=total_fiskers,
-                contributed_by=contributed_by
+                contributed_by=contributed_by,
             )
 
             click.echo("POST PREVIEW")
-            click.echo("="*60)
+            click.echo("=" * 60)
             click.echo(post_text)
-            click.echo(f"\nImages:")
+            click.echo("\nImages:")
             click.echo(f"  1. {image_path}")
             if map_path:
                 click.echo(f"  2. {map_path}")
-            click.echo("="*60 + "\n")
+            click.echo("=" * 60 + "\n")
 
             # Ask to post with default Yes
             if click.confirm("Post this to Bluesky?", default=True):
@@ -764,13 +776,13 @@ def batch_post(limit: int = None, preview: bool = False):
                         images=images,
                         unique_sighted=unique_sighted,
                         total_fiskers=total_fiskers,
-                        contributed_by=contributed_by
+                        contributed_by=contributed_by,
                     )
 
                     # Mark as posted
                     db.mark_as_posted(sighting_id, response.uri)
 
-                    click.echo(f"✓ Successfully posted to Bluesky!")
+                    click.echo("✓ Successfully posted to Bluesky!")
                     click.echo(f"  - Post URI: {response.uri}\n")
 
                 except Exception as e:
@@ -786,7 +798,10 @@ def batch_post(limit: int = None, preview: bool = False):
 
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
-        click.echo("\nMake sure to set BLUESKY_HANDLE and BLUESKY_PASSWORD environment variables.", err=True)
+        click.echo(
+            "\nMake sure to set BLUESKY_HANDLE and BLUESKY_PASSWORD environment variables.",
+            err=True,
+        )
         raise click.Abort()
     except Exception as e:
         click.echo(f"Error in batch posting: {e}", err=True)
@@ -794,8 +809,13 @@ def batch_post(limit: int = None, preview: bool = False):
 
 
 @cli.command()
-@click.option('--batch-size', type=int, default=4, help='Number of sightings per batch post (max 4, default: 4)')
-@click.option('--preview', is_flag=True, help='Preview the batch post without posting')
+@click.option(
+    "--batch-size",
+    type=int,
+    default=4,
+    help="Number of sightings per batch post (max 4, default: 4)",
+)
+@click.option("--preview", is_flag=True, help="Preview the batch post without posting")
 def multi_post(batch_size: int = 4, preview: bool = False):
     """
     Post multiple unposted sightings in a single Bluesky post.
@@ -859,6 +879,7 @@ def multi_post(batch_size: int = 4, preview: bool = False):
 
         # Show progress bar
         from post.bluesky import BlueskyClient
+
         progress_bar = BlueskyClient._create_progress_bar(unique_sighted, total_fiskers)
         click.echo(f"📈 {progress_bar}\n")
 
@@ -895,9 +916,7 @@ def multi_post(batch_size: int = 4, preview: bool = False):
         bluesky = BlueskyClient()
 
         response = bluesky.create_batch_sighting_post(
-            sightings=sightings_to_post,
-            unique_sighted=unique_sighted,
-            total_fiskers=total_fiskers
+            sightings=sightings_to_post, unique_sighted=unique_sighted, total_fiskers=total_fiskers
         )
 
         # Mark all sightings as posted
@@ -905,7 +924,7 @@ def multi_post(batch_size: int = 4, preview: bool = False):
         post_uri = response.uri
         db.mark_batch_as_posted(sighting_ids, post_uri)
 
-        click.echo(f"✓ Batch posted successfully!")
+        click.echo("✓ Batch posted successfully!")
         click.echo(f"  Post URI: {post_uri}")
         click.echo(f"  Marked {len(sighting_ids)} sighting(s) as posted")
 

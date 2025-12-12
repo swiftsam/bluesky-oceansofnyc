@@ -1,12 +1,12 @@
 """TLC (Taxi & Limousine Commission) database operations."""
 
-import psycopg2
 import csv
 import os
-import requests
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+
+import psycopg2
+import requests
 
 
 class TLCDatabase:
@@ -16,7 +16,7 @@ class TLCDatabase:
     TLC_CSV_URL = "https://data.cityofnewyork.us/api/views/8wbx-tsch/rows.csv?accessType=DOWNLOAD"
 
     def __init__(self, db_url: str = None):
-        self.db_url = db_url or os.getenv('DATABASE_URL')
+        self.db_url = db_url or os.getenv("DATABASE_URL")
         if not self.db_url:
             raise ValueError("DATABASE_URL not provided and not found in environment")
 
@@ -54,7 +54,7 @@ class TLCDatabase:
 
         # Save versioned file
         total_bytes = 0
-        with open(versioned_file, 'wb') as f:
+        with open(versioned_file, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
                 total_bytes += len(chunk)
@@ -70,6 +70,7 @@ class TLCDatabase:
         except (OSError, NotImplementedError):
             # Fallback to copying if symlinks not supported
             import shutil
+
             shutil.copy2(versioned_file, latest_file)
             print(f"✓ Copied to {latest_file}")
 
@@ -93,18 +94,19 @@ class TLCDatabase:
         count = 0
         skipped = 0
 
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
                 # Filter Fisker vehicles during import if requested
-                vin = row.get('Vehicle VIN Number', '')
-                if filter_fisker and not vin.startswith('VCF1'):
+                vin = row.get("Vehicle VIN Number", "")
+                if filter_fisker and not vin.startswith("VCF1"):
                     skipped += 1
                     continue
 
                 try:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO tlc_vehicles (
                             active, vehicle_license_number, name, license_type,
                             expiration_date, permit_license_number, dmv_license_plate_number,
@@ -138,32 +140,34 @@ class TLCDatabase:
                             last_date_updated = EXCLUDED.last_date_updated,
                             last_time_updated = EXCLUDED.last_time_updated,
                             import_date = EXCLUDED.import_date
-                    """, (
-                        row.get('Active', ''),
-                        row.get('Vehicle License Number', ''),
-                        row.get('Name', ''),
-                        row.get('License Type', ''),
-                        row.get('Expiration Date', ''),
-                        row.get('Permit License Number', ''),
-                        row.get('DMV License Plate Number', ''),
-                        vin,
-                        row.get('Wheelchair Accessible', ''),
-                        row.get('Certification Date', ''),
-                        row.get('Hack Up Date', ''),
-                        row.get('Vehicle Year', ''),
-                        row.get('Base Number', ''),
-                        row.get('Base Name', ''),
-                        row.get('Base Type', ''),
-                        row.get('VEH', ''),
-                        row.get('Base Telephone Number', ''),
-                        row.get('Website', ''),
-                        row.get('Base Address', ''),
-                        row.get('Reason', ''),
-                        row.get('Order Date', ''),
-                        row.get('Last Date Updated', ''),
-                        row.get('Last Time Updated', ''),
-                        import_date
-                    ))
+                    """,
+                        (
+                            row.get("Active", ""),
+                            row.get("Vehicle License Number", ""),
+                            row.get("Name", ""),
+                            row.get("License Type", ""),
+                            row.get("Expiration Date", ""),
+                            row.get("Permit License Number", ""),
+                            row.get("DMV License Plate Number", ""),
+                            vin,
+                            row.get("Wheelchair Accessible", ""),
+                            row.get("Certification Date", ""),
+                            row.get("Hack Up Date", ""),
+                            row.get("Vehicle Year", ""),
+                            row.get("Base Number", ""),
+                            row.get("Base Name", ""),
+                            row.get("Base Type", ""),
+                            row.get("VEH", ""),
+                            row.get("Base Telephone Number", ""),
+                            row.get("Website", ""),
+                            row.get("Base Address", ""),
+                            row.get("Reason", ""),
+                            row.get("Order Date", ""),
+                            row.get("Last Date Updated", ""),
+                            row.get("Last Time Updated", ""),
+                            import_date,
+                        ),
+                    )
                     count += 1
                 except psycopg2.IntegrityError:
                     pass
@@ -196,14 +200,17 @@ class TLCDatabase:
 
         return count
 
-    def get_vehicle_by_plate(self, license_plate: str) -> Optional[tuple]:
+    def get_vehicle_by_plate(self, license_plate: str) -> tuple | None:
         """Get TLC vehicle information by license plate."""
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT * FROM tlc_vehicles WHERE dmv_license_plate_number = %s
-        """, (license_plate,))
+        """,
+            (license_plate,),
+        )
 
         vehicle = cursor.fetchone()
         conn.close()
@@ -236,15 +243,18 @@ class TLCDatabase:
         cursor = conn.cursor()
 
         # Convert * to SQL wildcard _
-        sql_pattern = pattern.replace('*', '_')
+        sql_pattern = pattern.replace("*", "_")
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT dmv_license_plate_number, vehicle_vin_number, vehicle_year,
                    name, base_name, base_type
             FROM tlc_vehicles
             WHERE dmv_license_plate_number LIKE %s
             ORDER BY dmv_license_plate_number
-        """, (sql_pattern,))
+        """,
+            (sql_pattern,),
+        )
 
         results = cursor.fetchall()
         conn.close()
@@ -256,7 +266,9 @@ class TLCDatabase:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT dmv_license_plate_number FROM tlc_vehicles ORDER BY dmv_license_plate_number")
+        cursor.execute(
+            "SELECT dmv_license_plate_number FROM tlc_vehicles ORDER BY dmv_license_plate_number"
+        )
         plates = [row[0] for row in cursor.fetchall()]
         conn.close()
 
@@ -286,7 +298,7 @@ class TLCDatabase:
         print(f"✓ Imported/updated {fisker_count:,} Fisker Ocean vehicles")
 
         return {
-            'csv_path': csv_path,
-            'fisker_count': fisker_count,
-            'timestamp': datetime.now().isoformat()
+            "csv_path": csv_path,
+            "fisker_count": fisker_count,
+            "timestamp": datetime.now().isoformat(),
         }

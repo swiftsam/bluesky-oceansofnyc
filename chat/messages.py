@@ -26,7 +26,7 @@ def plate_not_found(plate: str, suggestions: list[str] = None):
     msg = f"Plate {plate} not found in the NYC TLC database."
 
     if suggestions:
-        msg += f"\n\nDid you mean one of these?\n"
+        msg += "\n\nDid you mean one of these?\n"
         for i, suggestion in enumerate(suggestions[:5], 1):
             msg += f"{i}. {suggestion}\n"
         msg += "\nReply with the number or send the correct plate."

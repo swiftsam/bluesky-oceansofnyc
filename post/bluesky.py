@@ -1,18 +1,17 @@
 """Bluesky client for posting sightings."""
 
-import os
 import io
-from pathlib import Path
-from typing import Optional
+import os
 from datetime import datetime
+
+from atproto import Client, client_utils, models
 from PIL import Image
-from atproto import Client, models, client_utils
 
 from geolocate.geocoding import Geocoder
 
 
 class BlueskyClient:
-    def __init__(self, handle: Optional[str] = None, password: Optional[str] = None):
+    def __init__(self, handle: str | None = None, password: str | None = None):
         """
         Initialize Bluesky client with credentials.
 
@@ -20,8 +19,8 @@ class BlueskyClient:
             handle: Bluesky handle (e.g., user.bsky.social). If not provided, reads from BLUESKY_HANDLE env var.
             password: Bluesky app password. If not provided, reads from BLUESKY_PASSWORD env var.
         """
-        self.handle = handle or os.getenv('BLUESKY_HANDLE')
-        self.password = password or os.getenv('BLUESKY_PASSWORD')
+        self.handle = handle or os.getenv("BLUESKY_HANDLE")
+        self.password = password or os.getenv("BLUESKY_PASSWORD")
 
         if not self.handle or not self.password:
             raise ValueError(
@@ -51,12 +50,12 @@ class BlueskyClient:
         img = Image.open(image_path)
 
         # Convert RGBA to RGB if necessary
-        if img.mode == 'RGBA':
-            background = Image.new('RGB', img.size, (255, 255, 255))
+        if img.mode == "RGBA":
+            background = Image.new("RGB", img.size, (255, 255, 255))
             background.paste(img, mask=img.split()[3])
             img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
 
         # Start with quality 85 and reduce if needed
         quality = 85
@@ -64,7 +63,7 @@ class BlueskyClient:
 
         while quality > 20:
             buffer = io.BytesIO()
-            img.save(buffer, format='JPEG', quality=quality, optimize=True)
+            img.save(buffer, format="JPEG", quality=quality, optimize=True)
             size = buffer.tell()
 
             if size <= max_size_bytes:
@@ -81,7 +80,7 @@ class BlueskyClient:
             resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
             buffer = io.BytesIO()
-            resized.save(buffer, format='JPEG', quality=quality, optimize=True)
+            resized.save(buffer, format="JPEG", quality=quality, optimize=True)
             size = buffer.tell()
 
             if size <= max_size_bytes:
@@ -96,7 +95,7 @@ class BlueskyClient:
         buffer.seek(0)
         return buffer.read()
 
-    def upload_image(self, image_path: str, alt_text: str = '') -> models.AppBskyEmbedImages.Image:
+    def upload_image(self, image_path: str, alt_text: str = "") -> models.AppBskyEmbedImages.Image:
         """
         Upload an image to Bluesky, compressing if necessary.
 
@@ -111,7 +110,9 @@ class BlueskyClient:
         upload_response = self.client.upload_blob(image_data)
         return models.AppBskyEmbedImages.Image(alt=alt_text, image=upload_response.blob)
 
-    def create_post(self, text: str, images: Optional[list[str]] = None, image_alts: Optional[list[str]] = None) -> dict:
+    def create_post(
+        self, text: str, images: list[str] | None = None, image_alts: list[str] | None = None
+    ) -> dict:
         """
         Create a post on Bluesky with optional images.
 
@@ -131,13 +132,15 @@ class BlueskyClient:
 
             # If no alt texts provided, use empty strings
             if image_alts is None:
-                image_alts = [''] * len(images)
+                image_alts = [""] * len(images)
 
             # Ensure we have the same number of alt texts as images
             if len(image_alts) != len(images):
                 raise ValueError("Number of alt texts must match number of images")
 
-            uploaded_images = [self.upload_image(img, alt) for img, alt in zip(images, image_alts)]
+            uploaded_images = [
+                self.upload_image(img, alt) for img, alt in zip(images, image_alts, strict=False)
+            ]
             embed = models.AppBskyEmbedImages.Main(images=uploaded_images)
 
         response = self.client.send_post(text=text, embed=embed)
@@ -151,7 +154,7 @@ class BlueskyClient:
         latitude: float | None,
         longitude: float | None,
         unique_sighted: int,
-        total_fiskers: int
+        total_fiskers: int,
     ) -> tuple[str, str, str | None, str | None]:
         """
         Build the core parts of a sighting post text.
@@ -183,7 +186,7 @@ class BlueskyClient:
         longitude: float | None,
         unique_sighted: int,
         total_fiskers: int,
-        contributed_by: str | None = None
+        contributed_by: str | None = None,
     ) -> str:
         """
         Format the text for a sighting post preview.
@@ -202,8 +205,13 @@ class BlueskyClient:
             Formatted post text
         """
         ordinal, formatted_time, progress_bar, location_text = self._build_sighting_text_parts(
-            license_plate, sighting_count, timestamp, latitude, longitude,
-            unique_sighted, total_fiskers
+            license_plate,
+            sighting_count,
+            timestamp,
+            latitude,
+            longitude,
+            unique_sighted,
+            total_fiskers,
         )
 
         # Build post text
@@ -217,7 +225,7 @@ class BlueskyClient:
         if location_text:
             if latitude is not None and longitude is not None:
                 # Check if it's coordinates or a neighborhood name
-                if ',' in location_text and '.' in location_text:
+                if "," in location_text and "." in location_text:
                     post_text += f"\n📍 Spotted at {location_text}"
                 else:
                     post_text += f"\n📍 Spotted in {location_text}"
@@ -238,7 +246,7 @@ class BlueskyClient:
         images: list[str],
         unique_sighted: int,
         total_fiskers: int,
-        contributed_by: str | None = None
+        contributed_by: str | None = None,
     ) -> dict:
         """
         Create a formatted sighting post for Bluesky.
@@ -262,8 +270,13 @@ class BlueskyClient:
 
         # Get text parts using shared logic
         ordinal, formatted_time, progress_bar, location_text = self._build_sighting_text_parts(
-            license_plate, sighting_count, timestamp, latitude, longitude,
-            unique_sighted, total_fiskers
+            license_plate,
+            sighting_count,
+            timestamp,
+            latitude,
+            longitude,
+            unique_sighted,
+            total_fiskers,
         )
 
         # Add main post content
@@ -276,14 +289,14 @@ class BlueskyClient:
         # Add location if available
         if location_text:
             # Check if it's coordinates or a neighborhood name
-            if ',' in location_text and '.' in location_text:
+            if "," in location_text and "." in location_text:
                 text_builder.text(f"\n📍 Spotted at {location_text}")
             else:
                 text_builder.text(f"\n📍 Spotted in {location_text}")
 
         # Add contributor with mention support
         if contributed_by:
-            if contributed_by.startswith('@'):
+            if contributed_by.startswith("@"):
                 # Extract handle (remove @ prefix)
                 handle = contributed_by[1:]
 
@@ -315,7 +328,9 @@ class BlueskyClient:
             else:
                 location_for_alt = f"coordinates {latitude:.4f}, {longitude:.4f}"
 
-            image_alts.append(f"Spotted a Fisker Ocean with plate {license_plate} in {location_for_alt}")
+            image_alts.append(
+                f"Spotted a Fisker Ocean with plate {license_plate} in {location_for_alt}"
+            )
         else:
             image_alts.append(f"Spotted a Fisker Ocean with plate {license_plate}")
 
@@ -330,9 +345,11 @@ class BlueskyClient:
                 else:
                     location_for_alt = f"coordinates {latitude:.4f}, {longitude:.4f}"
 
-                image_alts.append(f"Map of the location the Fisker Ocean was spotted in {location_for_alt}")
+                image_alts.append(
+                    f"Map of the location the Fisker Ocean was spotted in {location_for_alt}"
+                )
             else:
-                image_alts.append(f"Map image")
+                image_alts.append("Map image")
 
         # Upload images with alt text
         embed = None
@@ -340,7 +357,9 @@ class BlueskyClient:
             if len(images) > 4:
                 raise ValueError("Bluesky supports a maximum of 4 images per post")
 
-            uploaded_images = [self.upload_image(img, alt) for img, alt in zip(images, image_alts)]
+            uploaded_images = [
+                self.upload_image(img, alt) for img, alt in zip(images, image_alts, strict=False)
+            ]
             embed = models.AppBskyEmbedImages.Main(images=uploaded_images)
 
         # Send post with TextBuilder
@@ -351,16 +370,13 @@ class BlueskyClient:
     def _get_ordinal(n: int) -> str:
         """Convert number to ordinal string (1st, 2nd, 3rd, etc.)"""
         if 11 <= (n % 100) <= 13:
-            suffix = 'th'
+            suffix = "th"
         else:
-            suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
+            suffix = ["th", "st", "nd", "rd", "th"][min(n % 10, 4)]
         return f"{n}{suffix}"
 
     def create_batch_sighting_post(
-        self,
-        sightings: list[tuple],
-        unique_sighted: int,
-        total_fiskers: int
+        self, sightings: list[tuple], unique_sighted: int, total_fiskers: int
     ) -> dict:
         """
         Create a batch post for multiple sightings.
@@ -438,7 +454,7 @@ class BlueskyClient:
 
             contributor_list = sorted(list(contributor_display_names))
             for i, display_name in enumerate(contributor_list):
-                if display_name.startswith('@'):
+                if display_name.startswith("@"):
                     # Extract handle (remove @ prefix)
                     handle = display_name[1:]
 
@@ -471,7 +487,9 @@ class BlueskyClient:
         # Upload images
         embed = None
         if images:
-            uploaded_images = [self.upload_image(img, alt) for img, alt in zip(images, image_alts)]
+            uploaded_images = [
+                self.upload_image(img, alt) for img, alt in zip(images, image_alts, strict=False)
+            ]
             embed = models.AppBskyEmbedImages.Main(images=uploaded_images)
 
         # Send post
@@ -482,9 +500,9 @@ class BlueskyClient:
     def _get_ordinal(n: int) -> str:
         """Convert number to ordinal string (1st, 2nd, 3rd, etc.)"""
         if 11 <= (n % 100) <= 13:
-            suffix = 'th'
+            suffix = "th"
         else:
-            suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
+            suffix = ["th", "st", "nd", "rd", "th"][min(n % 10, 4)]
         return f"{n}{suffix}"
 
     @staticmethod
@@ -505,8 +523,8 @@ class BlueskyClient:
         empty = bar_length - filled
 
         # Use filled and empty block characters
-        filled_bar = '█' * filled
-        empty_bar = '▒' * empty
+        filled_bar = "█" * filled
+        empty_bar = "▒" * empty
         bar = filled_bar + empty_bar
 
         return f"{percentage:.1f}% {bar} ({current} out of {total})"

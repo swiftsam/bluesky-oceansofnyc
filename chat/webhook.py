@@ -2,18 +2,18 @@
 
 import os
 from urllib.parse import parse_qs
-from typing import Optional
+
 import requests
 
 
 def parse_twilio_request(body: bytes) -> dict:
     """Parse incoming Twilio webhook request body."""
-    parsed = parse_qs(body.decode('utf-8'))
+    parsed = parse_qs(body.decode("utf-8"))
     # parse_qs returns lists, extract single values
     return {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
 
 
-def download_media(media_url: str, auth: tuple) -> Optional[bytes]:
+def download_media(media_url: str, auth: tuple) -> bytes | None:
     """
     Download media from Twilio.
 
@@ -36,12 +36,13 @@ def download_media(media_url: str, auth: tuple) -> Optional[bytes]:
 def create_twiml_response(message: str) -> str:
     """Create a TwiML response to send an SMS reply."""
     # Escape XML special characters
-    escaped = (message
-        .replace('&', '&amp;')
-        .replace('<', '&lt;')
-        .replace('>', '&gt;')
-        .replace('"', '&quot;')
-        .replace("'", '&apos;'))
+    escaped = (
+        message.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -77,12 +78,13 @@ def handle_incoming_sms(
     Returns:
         TwiML response string
     """
-    from chat.session import ChatSession
-    from chat import messages
-    from validate import validate_plate, get_potential_matches
-    from geolocate import extract_gps_from_exif, extract_timestamp_from_exif
-    from database import SightingsDatabase
     from datetime import datetime
+
+    from chat import messages
+    from chat.session import ChatSession
+    from database import SightingsDatabase
+    from geolocate import extract_gps_from_exif, extract_timestamp_from_exif
+    from validate import get_potential_matches, validate_plate
 
     print(f"📱 Incoming message from {from_number}")
     print(f"   Channel: {channel_type.upper()}")
@@ -137,6 +139,7 @@ def handle_incoming_sms(
                 # Extract GPS coordinates and timestamp
                 try:
                     from geolocate.exif import extract_image_metadata
+
                     metadata = extract_image_metadata(image_path)
                     print(f"🔍 Image metadata: {metadata}")
 
@@ -177,6 +180,7 @@ def handle_incoming_sms(
                 except Exception as e:
                     print(f"❌ Error extracting metadata: {e}")
                     import traceback
+
                     traceback.print_exc()
                     os.remove(image_path)  # Clean up
                     return create_twiml_response(messages.error_general())
@@ -193,6 +197,7 @@ def handle_incoming_sms(
 
             # Try to geocode the location
             from geolocate.geocoding import geocode_address
+
             coords = geocode_address(location_text)
 
             if coords is None:
@@ -235,10 +240,9 @@ def handle_incoming_sms(
                 )
 
                 return create_twiml_response(messages.confirm_sighting(plate, vehicle, count))
-            else:
-                # Try to find similar plates
-                suggestions = get_potential_matches(plate, max_results=5)
-                return create_twiml_response(messages.plate_not_found(plate, suggestions))
+            # Try to find similar plates
+            suggestions = get_potential_matches(plate, max_results=5)
+            return create_twiml_response(messages.plate_not_found(plate, suggestions))
 
         # State: AWAITING_CONFIRMATION - expecting YES or plate number
         elif state == ChatSession.AWAITING_CONFIRMATION:
@@ -267,13 +271,17 @@ def handle_incoming_sms(
                     # Image already exists in database
                     print(f"⚠️ Duplicate image detected for plate {session_data['pending_plate']}")
                     session.reset()
-                    return create_twiml_response("This image has already been submitted. Send a new photo to log another sighting!")
+                    return create_twiml_response(
+                        "This image has already been submitted. Send a new photo to log another sighting!"
+                    )
 
-                print(f"✅ Sighting saved for plate {session_data['pending_plate']} (ID: {sighting_id})")
+                print(
+                    f"✅ Sighting saved for plate {session_data['pending_plate']} (ID: {sighting_id})"
+                )
 
                 # Check if contributor has a preferred name
                 contributor = db.get_contributor(contributor_id=contributor_id)
-                if not contributor['preferred_name']:
+                if not contributor["preferred_name"]:
                     # Ask if they want to set a name
                     session.update(state=ChatSession.AWAITING_NAME)
                     msg = messages.sighting_saved()
@@ -284,47 +292,52 @@ def handle_incoming_sms(
                 session.reset()
 
                 return create_twiml_response(messages.sighting_saved())
-            else:
-                # Assume they're sending a corrected plate number
-                plate = body.strip().upper()
-                is_valid, vehicle = validate_plate(plate)
+            # Assume they're sending a corrected plate number
+            plate = body.strip().upper()
+            is_valid, vehicle = validate_plate(plate)
 
-                if is_valid and vehicle:
-                    db = SightingsDatabase()
-                    count = db.get_posted_sighting_count(plate)
+            if is_valid and vehicle:
+                db = SightingsDatabase()
+                count = db.get_posted_sighting_count(plate)
 
-                    session.update(pending_plate=plate)
+                session.update(pending_plate=plate)
 
-                    return create_twiml_response(messages.confirm_sighting(plate, vehicle, count))
-                else:
-                    suggestions = get_potential_matches(plate, max_results=5)
-                    return create_twiml_response(messages.plate_not_found(plate, suggestions))
+                return create_twiml_response(messages.confirm_sighting(plate, vehicle, count))
+            suggestions = get_potential_matches(plate, max_results=5)
+            return create_twiml_response(messages.plate_not_found(plate, suggestions))
 
         # State: AWAITING_NAME - user can set their preferred name
         elif state == ChatSession.AWAITING_NAME:
             if not body:
                 session.reset()
-                return create_twiml_response("No problem, you'll remain anonymous. Send a new photo anytime!")
+                return create_twiml_response(
+                    "No problem, you'll remain anonymous. Send a new photo anytime!"
+                )
 
             if body.strip().upper() == "SKIP":
                 session.reset()
-                return create_twiml_response("No problem, you'll remain anonymous. Send a new photo anytime!")
+                return create_twiml_response(
+                    "No problem, you'll remain anonymous. Send a new photo anytime!"
+                )
 
             # Set the preferred name
             preferred_name = body.strip()
             if len(preferred_name) > 50:
-                return create_twiml_response("Name is too long (max 50 characters). Please try again or reply SKIP.")
+                return create_twiml_response(
+                    "Name is too long (max 50 characters). Please try again or reply SKIP."
+                )
 
             db = SightingsDatabase()
             contributor = db.get_contributor(phone_number=from_number)
 
             if contributor:
-                db.update_contributor_name(contributor['id'], preferred_name)
+                db.update_contributor_name(contributor["id"], preferred_name)
                 session.reset()
-                return create_twiml_response(f"Great! Future posts will credit you as '{preferred_name}'. Send a new photo anytime!")
-            else:
-                session.reset()
-                return create_twiml_response("Error setting name. Send a new photo anytime!")
+                return create_twiml_response(
+                    f"Great! Future posts will credit you as '{preferred_name}'. Send a new photo anytime!"
+                )
+            session.reset()
+            return create_twiml_response("Error setting name. Send a new photo anytime!")
 
         else:
             # Unknown state, reset
@@ -334,6 +347,7 @@ def handle_incoming_sms(
     except Exception as e:
         print(f"❌ Error processing message: {e}")
         import traceback
+
         traceback.print_exc()
         session.reset()
         return create_twiml_response(messages.error_general())
