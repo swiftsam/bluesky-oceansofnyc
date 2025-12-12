@@ -587,7 +587,7 @@ def chat_sms_webhook():
     Twilio SMS/MMS webhook endpoint.
 
     Configure this URL in your Twilio phone number settings:
-    https://wallabout--fisker-ocean-bot-chat-sms-webhook.modal.run
+    https://wallabout--oceans-of-nyc-chat-sms-webhook.modal.run
 
     Twilio sends POST requests with form-encoded data including:
     - From: Sender phone number
