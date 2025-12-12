@@ -385,14 +385,23 @@ class BlueskyClient:
         # Sighting tuple: (id, license_plate, timestamp, lat, lon, image_path, created_at, post_uri,
         #                  contributor_id, preferred_name, bluesky_handle, phone_number)
         contributor_display_names = set()
+        unique_contributor_ids = set()
         for sighting in sightings:
+            contributor_id = sighting[8]  # contributor_id
             preferred_name = sighting[9]  # preferred_name
             bluesky_handle = sighting[10]  # bluesky_handle
 
-            if preferred_name:
-                contributor_display_names.add(preferred_name)
-            elif bluesky_handle:
-                contributor_display_names.add(bluesky_handle)
+            if contributor_id is not None:
+                unique_contributor_ids.add(contributor_id)
+
+                # Skip adding display name for contributor id = 1
+                if contributor_id == 1:
+                    continue
+
+                if preferred_name:
+                    contributor_display_names.add(preferred_name)
+                elif bluesky_handle:
+                    contributor_display_names.add(bluesky_handle)
             # If neither, they remain anonymous (not added to set)
 
         # Extract license plates
@@ -404,16 +413,14 @@ class BlueskyClient:
         # Header
         sighting_word = "sighting" if len(sightings) == 1 else "sightings"
 
-        # Count total contributors (including anonymous)
-        has_contributors = any(s[8] is not None for s in sightings)  # contributor_id not None
-        unique_contributor_ids = set(s[8] for s in sightings if s[8] is not None)
-        num_contributors = len(unique_contributor_ids)
+        # Count contributors (excluding id = 1)
+        num_contributors_to_show = len(unique_contributor_ids - {1})
 
         text_builder.text(f"🌊 {len(sightings)} new {sighting_word}")
 
-        if num_contributors > 0:
-            contributor_word = "contributor" if num_contributors == 1 else "contributors"
-            text_builder.text(f" from {num_contributors} {contributor_word}\n")
+        if num_contributors_to_show > 0:
+            contributor_word = "contributor" if num_contributors_to_show == 1 else "contributors"
+            text_builder.text(f" from {num_contributors_to_show} {contributor_word}\n")
         else:
             text_builder.text("\n")
 
