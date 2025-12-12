@@ -278,7 +278,7 @@ def post(sighting_id: int):
         image_path = sighting[5]
         # sighting[6] is created_at
         # sighting[7] is post_uri
-        contributor_id = sighting[8]
+        # sighting[8] is contributor_id (not used here)
         preferred_name = sighting[9]
         bluesky_handle = sighting[10]
 
@@ -660,7 +660,7 @@ def batch_post(limit: int = None, preview: bool = False):
                 license_plate = sighting[1]
                 timestamp = sighting[2]
                 image_path = sighting[5]
-                contributor_id = sighting[8]
+                # sighting[8] is contributor_id (not used here)
                 preferred_name = sighting[9]
                 bluesky_handle = sighting[10]
 
@@ -696,7 +696,7 @@ def batch_post(limit: int = None, preview: bool = False):
             image_path = sighting[5]
             # sighting[6] is created_at
             # sighting[7] is post_uri
-            contributor_id = sighting[8]
+            # sighting[8] is contributor_id (not used here)
             preferred_name = sighting[9]
             bluesky_handle = sighting[10]
 

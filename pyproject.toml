@@ -65,7 +65,7 @@ ignore = [
     "RET504",  # unnecessary assignment before return (sometimes clearer)
     "C401",  # generator to comprehension (minor optimization)
     "C414",  # unnecessary list() call (minor optimization)
-    "F841",  # unused local variable (can clean up later)
+    # "F841",  # unused local variable (can clean up later)
 ]
 
 [tool.ruff.lint.per-file-ignores]
