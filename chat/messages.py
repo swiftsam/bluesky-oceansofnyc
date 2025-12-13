@@ -36,18 +36,25 @@ def plate_not_found(plate: str, suggestions: list[str] = None):
     return msg
 
 
-def confirm_sighting(plate: str, vehicle_info: tuple, count: int):
-    """Ask user to confirm the sighting."""
-    msg = "Found it! The plate matches one found in the TLC database."
-    msg += f"\n\nThis is sighting #{count + 1} of this vehicle."
-    msg += "\n\nReply YES to confirm or CANCEL to abort."
+def sighting_confirmed(
+    plate: str, vehicle_sighting_num: int, total_sightings: int, contributor_sighting_num: int
+):
+    """Confirmation that sighting was validated and saved."""
+    msg = "License plate validated, and sighting logged! This is"
+    msg += f"\n- the {_ordinal(vehicle_sighting_num)} sighting of this vehicle"
+    msg += f"\n- the {_ordinal(total_sightings)} Ocean sighting overall"
+    msg += f"\n- your {_ordinal(contributor_sighting_num)} contribution. Thanks!!"
 
     return msg
 
 
-def sighting_saved():
-    """Confirmation that sighting was saved."""
-    return "Sighting saved! It will be posted to Bluesky soon. Thanks for contributing! 🌊"
+def _ordinal(n: int) -> str:
+    """Convert number to ordinal string (1st, 2nd, 3rd, etc.)."""
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
 
 
 def sighting_cancelled():

@@ -229,37 +229,14 @@ def handle_incoming_sms(
             is_valid, vehicle = validate_plate(plate)
 
             if is_valid and vehicle:
-                # Get sighting count for this plate
-                db = SightingsDatabase()
-                count = db.get_posted_sighting_count(plate)
-
-                # Update session with plate
-                session.update(
-                    state=ChatSession.AWAITING_CONFIRMATION,
-                    pending_plate=plate,
-                )
-
-                return create_twiml_response(messages.confirm_sighting(plate, vehicle, count))
-            # Try to find similar plates
-            suggestions = get_potential_matches(plate, max_results=5)
-            return create_twiml_response(messages.plate_not_found(plate, suggestions))
-
-        # State: AWAITING_CONFIRMATION - expecting YES or plate number
-        elif state == ChatSession.AWAITING_CONFIRMATION:
-            if not body:
-                return create_twiml_response(messages.invalid_response())
-
-            response_upper = body.strip().upper()
-
-            if response_upper == "YES":
-                # Save sighting to database
+                # Plate is valid - auto-save sighting immediately
                 db = SightingsDatabase()
 
                 # Get or create contributor
                 contributor_id = db.get_or_create_contributor(phone_number=from_number)
 
                 sighting_id = db.add_sighting(
-                    license_plate=session_data["pending_plate"],
+                    license_plate=plate,
                     timestamp=session_data["pending_timestamp"],
                     latitude=session_data["pending_latitude"],
                     longitude=session_data["pending_longitude"],
@@ -269,40 +246,40 @@ def handle_incoming_sms(
 
                 if sighting_id is None:
                     # Image already exists in database
-                    print(f"⚠️ Duplicate image detected for plate {session_data['pending_plate']}")
+                    print(f"⚠️ Duplicate image detected for plate {plate}")
                     session.reset()
                     return create_twiml_response(
                         "This image has already been submitted. Send a new photo to log another sighting!"
                     )
 
-                print(
-                    f"✅ Sighting saved for plate {session_data['pending_plate']} (ID: {sighting_id})"
-                )
+                print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
+
+                # Get stats for the confirmation message
+                vehicle_sighting_num = db.get_sighting_count(plate)
+                total_sightings = db.get_total_sighting_count()
+                contributor_sighting_num = db.get_contributor_sighting_count(contributor_id)
 
                 # Check if contributor has a preferred name
                 contributor = db.get_contributor(contributor_id=contributor_id)
                 if not contributor["preferred_name"]:
                     # Ask if they want to set a name
                     session.update(state=ChatSession.AWAITING_NAME)
-                    msg = messages.sighting_saved()
+                    msg = messages.sighting_confirmed(
+                        plate, vehicle_sighting_num, total_sightings, contributor_sighting_num
+                    )
                     msg += "\n\nWould you like to set a name for future posts? Reply with your name, or SKIP to remain anonymous."
                     return create_twiml_response(msg)
 
                 # Reset session
                 session.reset()
 
-                return create_twiml_response(messages.sighting_saved())
-            # Assume they're sending a corrected plate number
-            plate = body.strip().upper()
-            is_valid, vehicle = validate_plate(plate)
+                return create_twiml_response(
+                    messages.sighting_confirmed(
+                        plate, vehicle_sighting_num, total_sightings, contributor_sighting_num
+                    )
+                )
 
-            if is_valid and vehicle:
-                db = SightingsDatabase()
-                count = db.get_posted_sighting_count(plate)
-
-                session.update(pending_plate=plate)
-
-                return create_twiml_response(messages.confirm_sighting(plate, vehicle, count))
+            # Try to find similar plates
             suggestions = get_potential_matches(plate, max_results=5)
             return create_twiml_response(messages.plate_not_found(plate, suggestions))
 

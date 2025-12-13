@@ -251,6 +251,34 @@ class SightingsDatabase:
 
         return count
 
+    def get_total_sighting_count(self) -> int:
+        """Get the total number of all sightings."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM sightings")
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        return count
+
+    def get_contributor_sighting_count(self, contributor_id: int) -> int:
+        """Get the number of sightings submitted by a specific contributor."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM sightings WHERE contributor_id = %s
+        """,
+            (contributor_id,),
+        )
+
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        return count
+
     def get_all_sightings(self, license_plate: str = None):
         """Get all sightings, optionally filtered by license plate."""
         conn = self._get_connection()
