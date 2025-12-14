@@ -152,21 +152,16 @@ def handle_incoming_sms(
                     except (ValueError, TypeError):
                         sighting_time = datetime.now()
 
-                    if gps_coords is None:
-                        print("⚠️ No GPS data in image - asking user for location")
-                        # Save image and ask for location
-                        session.update(
-                            state=ChatSession.AWAITING_LOCATION,
-                            pending_image_path=image_path,
-                            pending_timestamp=sighting_time,
-                        )
-                        return create_twiml_response(messages.welcome_with_image_no_gps())
+                    # Extract GPS if available
+                    lat, lon = None, None
+                    if gps_coords is not None:
+                        lat, lon = gps_coords
+                        print(f"📍 GPS: {lat}, {lon}")
+                    else:
+                        print("⚠️ No GPS data in image - will ask for location after plate")
 
-                    # GPS data found
-                    lat, lon = gps_coords
-                    print(f"📍 GPS: {lat}, {lon}")
-
-                    # Update session with GPS data, proceed to plate
+                    # Always proceed to AWAITING_PLATE state
+                    # Store GPS if found (None if not - we'll ask for location later)
                     session.update(
                         state=ChatSession.AWAITING_PLATE,
                         pending_image_path=image_path,
@@ -180,6 +175,7 @@ def handle_incoming_sms(
                     contributor = db.get_contributor(phone_number=from_number)
                     contributor_name = contributor.get("preferred_name") if contributor else None
 
+                    # Always greet and ask for plate first
                     return create_twiml_response(messages.welcome_with_image(contributor_name))
 
                 except Exception as e:
@@ -192,7 +188,7 @@ def handle_incoming_sms(
             else:
                 return create_twiml_response(messages.help_message())
 
-        # State: AWAITING_LOCATION - expecting location text
+        # State: AWAITING_LOCATION - expecting location text (plate already validated)
         elif state == ChatSession.AWAITING_LOCATION:
             if not body:
                 return create_twiml_response(messages.request_location())
@@ -214,14 +210,54 @@ def handle_incoming_sms(
             lat, lon = coords
             print(f"📍 Geocoded to: {lat}, {lon}")
 
-            # Update session with geocoded location
-            session.update(
-                state=ChatSession.AWAITING_PLATE,
-                pending_latitude=lat,
-                pending_longitude=lon,
+            # We have everything now - save the sighting
+            db = SightingsDatabase()
+            contributor_id = db.get_or_create_contributor(phone_number=from_number)
+
+            plate = session_data["pending_plate"]
+            sighting_id = db.add_sighting(
+                license_plate=plate,
+                timestamp=session_data["pending_timestamp"],
+                latitude=lat,
+                longitude=lon,
+                image_path=session_data["pending_image_path"],
+                contributor_id=contributor_id,
             )
 
-            return create_twiml_response(messages.request_plate())
+            if sighting_id is None:
+                # Image already exists in database
+                print(f"⚠️ Duplicate image detected for plate {plate}")
+                session.reset()
+                return create_twiml_response(
+                    "This image has already been submitted. Send a new photo to log another sighting!"
+                )
+
+            print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
+
+            # Get stats for the confirmation message
+            vehicle_sighting_num = db.get_sighting_count(plate)
+            total_sightings = db.get_total_sighting_count()
+            contributor_sighting_num = db.get_contributor_sighting_count(contributor_id)
+
+            # Check if contributor has a preferred name
+            contributor = db.get_contributor(contributor_id=contributor_id)
+            if not contributor["preferred_name"]:
+                # Ask if they want to set a name
+                session.update(state=ChatSession.AWAITING_NAME)
+                msg = messages.sighting_confirmed(
+                    plate, vehicle_sighting_num, total_sightings, contributor_sighting_num
+                )
+                msg += "\n\nWould you like to set a name for future posts? Reply with your name, or SKIP to remain anonymous."
+                return create_twiml_response(msg)
+
+            # Reset session
+            session.reset()
+
+            return create_twiml_response(
+                messages.sighting_confirmed(
+                    plate, vehicle_sighting_num, total_sightings, contributor_sighting_num
+                )
+            )
 
         # State: AWAITING_PLATE - expecting plate number
         elif state == ChatSession.AWAITING_PLATE:
@@ -234,9 +270,25 @@ def handle_incoming_sms(
             is_valid, vehicle = validate_plate(plate)
 
             if is_valid and vehicle:
-                # Plate is valid - auto-save sighting immediately
+                # Plate is valid! Check if we have GPS or need to ask for location
                 db = SightingsDatabase()
 
+                # Check if GPS exists in session
+                has_gps = (
+                    session_data["pending_latitude"] is not None
+                    and session_data["pending_longitude"] is not None
+                )
+
+                if not has_gps:
+                    # No GPS - save plate and ask for location
+                    print(f"✓ Plate {plate} validated, asking for location")
+                    session.update(
+                        state=ChatSession.AWAITING_LOCATION,
+                        pending_plate=plate,
+                    )
+                    return create_twiml_response(messages.request_location_after_plate())
+
+                # GPS exists - save sighting immediately
                 # Get or create contributor
                 contributor_id = db.get_or_create_contributor(phone_number=from_number)
 

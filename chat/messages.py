@@ -2,20 +2,22 @@
 
 
 def welcome_with_image(contributor_name: str = None):
-    """Message when user sends first image with GPS."""
+    """Message when user sends first image (GPS status doesn't matter)."""
     if contributor_name:
         return f"Nice spot, {contributor_name}! What's the plate number?"
     return "Great photo! What's the license plate number?"
 
 
-def welcome_with_image_no_gps():
-    """Message when user sends first image without GPS."""
-    return "Great photo! Where did you see this vehicle? (Send a street address or neighborhood in NYC)"
-
-
 def request_location():
     """Prompt user for location when missing."""
     return "Where did you see this vehicle? (Send a street address or neighborhood in NYC)"
+
+
+def request_location_after_plate():
+    """Prompt for location after plate validation (no GPS in image)."""
+    return (
+        "Great! Now where did you see this vehicle? (Send a street address or neighborhood in NYC)"
+    )
 
 
 def request_plate():
