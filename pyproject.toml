@@ -13,6 +13,7 @@ dependencies = [
     "staticmap>=0.5.7",
     "psycopg2-binary>=2.9.10",
     "modal>=1.2.4",
+    "twilio>=9.0.0",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +31,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["post", "chat", "data", "process", "database", "validate", "geolocate"]
+packages = ["post", "chat", "data", "process", "database", "validate", "geolocate", "notify"]
 
 [tool.ruff]
 line-length = 100

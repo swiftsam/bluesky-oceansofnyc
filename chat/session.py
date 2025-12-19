@@ -19,6 +19,7 @@ class ChatSession:
         self.phone_number = phone_number
         self.db_url = db_url or os.getenv("DATABASE_URL")
         self._data = None
+        self._is_new_session = False
 
     def get(self) -> dict:
         """Get or create session for this phone number."""
@@ -36,6 +37,7 @@ class ChatSession:
                 if row:
                     cols = [desc[0] for desc in cur.description]
                     self._data = dict(zip(cols, row, strict=False))
+                    self._is_new_session = False
                 else:
                     # Create new session
                     cur.execute(
@@ -49,9 +51,14 @@ class ChatSession:
                     row = cur.fetchone()
                     cols = [desc[0] for desc in cur.description]
                     self._data = dict(zip(cols, row, strict=False))
+                    self._is_new_session = True
                     conn.commit()
 
         return self._data
+
+    def is_new_session(self) -> bool:
+        """Check if this is a newly created session."""
+        return self._is_new_session
 
     def update(
         self,

@@ -21,21 +21,25 @@ image = (
         "python-dotenv>=1.0.0",
         "staticmap>=0.5.7",
         "fastapi>=0.115.0",
+        "twilio>=9.0.0",
     )
     .add_local_python_source("database")
     .add_local_python_source("validate")
     .add_local_python_source("geolocate")
     .add_local_python_source("post")
     .add_local_python_source("chat")
+    .add_local_python_source("notify")
 )
 
 # Define secrets
 # To set these up, run:
 # modal secret create bluesky-credentials BLUESKY_HANDLE=<handle> BLUESKY_PASSWORD=<password>
 # modal secret create neon-db DATABASE_URL=<connection-string>
+# modal secret create twilio-credentials TWILIO_ACCOUNT_SID=<sid> TWILIO_AUTH_TOKEN=<token> TWILIO_PHONE_NUMBER=<number>
 secrets = [
     modal.Secret.from_name("bluesky-credentials"),
     modal.Secret.from_name("neon-db"),
+    modal.Secret.from_name("twilio-credentials"),
 ]
 
 # Create a persistent volume for images and maps

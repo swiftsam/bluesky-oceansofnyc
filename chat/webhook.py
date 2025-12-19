@@ -106,6 +106,20 @@ def handle_incoming_sms(
     session_data = session.get()
     state = session_data.get("state", ChatSession.IDLE)
 
+    # Send notification for new chat sessions (non-admin contributors only)
+    if session.is_new_session():
+        from database import SightingsDatabase
+
+        db = SightingsDatabase()
+        contributor = db.get_contributor(phone_number=from_number)
+
+        # Only notify if contributor exists and is not admin (id != 1)
+        if contributor and contributor.get("id") != 1:
+            from notify import send_admin_notification
+
+            display_name = contributor.get("preferred_name") or from_number
+            send_admin_notification(f"New chat session from {display_name}")
+
     try:
         # State: IDLE - expecting photo
         if state == ChatSession.IDLE:
@@ -234,6 +248,14 @@ def handle_incoming_sms(
 
             print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
 
+            # Send notification for successful submission (non-admin contributors only)
+            if contributor_id != 1:
+                from notify import send_admin_notification
+
+                contributor = db.get_contributor(contributor_id=contributor_id)
+                display_name = contributor.get("preferred_name") or from_number
+                send_admin_notification(f"Successful submission from {display_name}")
+
             # Get stats for the confirmation message
             vehicle_sighting_num = db.get_sighting_count(plate)
             total_sightings = db.get_total_sighting_count()
@@ -316,6 +338,14 @@ def handle_incoming_sms(
                     )
 
                 print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
+
+                # Send notification for successful submission (non-admin contributors only)
+                if contributor_id != 1:
+                    from notify import send_admin_notification
+
+                    contributor = db.get_contributor(contributor_id=contributor_id)
+                    display_name = contributor.get("preferred_name") or from_number
+                    send_admin_notification(f"Successful submission from {display_name}")
 
                 # Get stats for the confirmation message
                 vehicle_sighting_num = db.get_sighting_count(plate)
