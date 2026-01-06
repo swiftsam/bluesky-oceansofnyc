@@ -52,197 +52,16 @@ MAPS_PATH = f"{VOLUME_PATH}/maps"
 TLC_PATH = f"{VOLUME_PATH}/tlc"
 
 
-@app.function(
-    image=image,
-    secrets=secrets,
-    volumes={VOLUME_PATH: volume},
-    timeout=600,  # 10 minutes max
-)
-def post_single_sighting(limit: int = 5, dry_run: bool = False):
-    """
-    Post unposted sightings to Bluesky with images.
-
-    Args:
-        limit: Maximum number of posts to make (default: 5)
-        dry_run: If True, only show what would be posted without actually posting
-    """
-    import os
-    import time
-    from datetime import datetime
-    from pathlib import Path
-
-    from database import SightingsDatabase
-    from geolocate import generate_map, reverse_geocode
-    from post.bluesky import BlueskyClient
-
-    print(f"🚀 Starting batch post (limit: {limit}, dry_run: {dry_run})")
-
-    # Ensure directories exist
-    os.makedirs(IMAGES_PATH, exist_ok=True)
-    os.makedirs(MAPS_PATH, exist_ok=True)
-
-    # Initialize database and client
-    db = SightingsDatabase()
-    client = BlueskyClient()
-
-    # Get unposted sightings
-    sightings = db.get_unposted_sightings()
-
-    if not sightings:
-        print("✓ No unposted sightings found")
-        return {"posted": 0, "message": "No unposted sightings"}
-
-    print(f"Found {len(sightings)} unposted sighting(s)")
-
-    # Limit the number of posts
-    sightings_to_post = sightings[:limit] if limit else sightings
-    posted_count = 0
-
-    for idx, sighting in enumerate(sightings_to_post, 1):
-        (
-            sighting_id,
-            license_plate,
-            timestamp,
-            latitude,
-            longitude,
-            image_path,
-            created_at,
-            posted,
-            post_uri,
-            contributed_by,
-        ) = sighting
-
-        print(f"\n{'='*60}")
-        print(f"Processing sighting {idx}/{len(sightings_to_post)} (ID: {sighting_id})")
-        print(f"{'='*60}")
-
-        try:
-            # Get sighting counts
-            posted_count_for_plate = db.get_posted_sighting_count(license_plate)
-            unique_posted_count = db.get_unique_posted_count()
-            total_vehicles = db.get_tlc_vehicle_count()
-
-            # Get neighborhood name
-            neighborhood = "Unknown location"
-            if latitude and longitude:
-                try:
-                    neighborhood = reverse_geocode(latitude, longitude)
-                    time.sleep(1.1)  # Respect Nominatim rate limit
-                except Exception as e:
-                    print(f"⚠ Warning: Could not reverse geocode: {e}")
-
-            # Format timestamp
-            dt = datetime.fromisoformat(timestamp)
-            formatted_date = dt.strftime("%B %d, %Y at %I:%M %p")
-
-            # Build post text
-            ordinal = lambda n: f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
-
-            post_text = f"""🌊 Fisker Ocean sighting!
-
-🚗 Plate: {license_plate}
-📈 {unique_posted_count + 1} out of {total_vehicles} Oceans collected
-🔢 This is the {ordinal(posted_count_for_plate + 1)} sighting of this vehicle
-📅 {formatted_date}
-📍 Spotted in {neighborhood}"""
-
-            if contributed_by:
-                post_text += f"\n\n🙏 Contributed by {contributed_by}"
-
-            print(f"\nPost preview:\n{post_text}\n")
-
-            # Prepare images for posting
-            images_to_post = []
-            image_alts = []
-
-            # Check if sighting image exists in volume
-            if image_path:
-                # Convert local path to volume path
-                image_filename = Path(image_path).name
-                volume_image_path = f"{IMAGES_PATH}/{image_filename}"
-
-                if os.path.exists(volume_image_path):
-                    images_to_post.append(volume_image_path)
-                    image_alts.append(
-                        f"Fisker Ocean with plate {license_plate} spotted in {neighborhood}"
-                    )
-                    print(f"✓ Found image: {image_filename}")
-                else:
-                    print(f"⚠ Image not found in volume: {image_filename}")
-
-            # Generate map if we have coordinates
-            if latitude and longitude:
-                map_filename = f"map_{sighting_id}.png"
-                map_path = f"{MAPS_PATH}/{map_filename}"
-
-                if not os.path.exists(map_path):
-                    try:
-                        print("🗺 Generating map...")
-                        generate_map(latitude, longitude, map_path)
-                        volume.commit()  # Persist the map to volume
-                        print(f"✓ Map generated: {map_filename}")
-                    except Exception as e:
-                        print(f"⚠ Could not generate map: {e}")
-
-                if os.path.exists(map_path):
-                    images_to_post.append(map_path)
-                    image_alts.append(
-                        f"Map showing location of Fisker Ocean sighting in {neighborhood}"
-                    )
-
-            if dry_run:
-                print("🔍 DRY RUN - Would post to Bluesky")
-                print(f"   Images: {len(images_to_post)}")
-                posted_count += 1
-            else:
-                # Post with images if available
-                if images_to_post:
-                    print(f"📸 Posting with {len(images_to_post)} image(s)")
-                    response = client.create_post(
-                        post_text, images=images_to_post, image_alts=image_alts
-                    )
-                else:
-                    print("📝 Posting text only (no images available)")
-                    response = client.create_post(post_text)
-
-                post_uri_result = response.uri
-
-                # Mark as posted
-                db.mark_as_posted(sighting_id, post_uri_result)
-
-                print(f"✓ Posted to Bluesky: {post_uri_result}")
-                posted_count += 1
-
-                # Rate limiting - wait between posts
-                if idx < len(sightings_to_post):
-                    print("⏱ Waiting 10 seconds before next post...")
-                    time.sleep(10)
-
-        except Exception as e:
-            print(f"✗ Error posting sighting {sighting_id}: {e}")
-            import traceback
-
-            traceback.print_exc()
-            continue
-
-    print(f"\n{'='*60}")
-    print(f"✓ Batch complete: {posted_count} sighting(s) posted")
-    print(f"{'='*60}")
-
-    return {
-        "posted": posted_count,
-        "total_unposted": len(sightings),
-        "message": f"Posted {posted_count} sightings",
-    }
-
-
 @app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume})
-def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
+def post_batch(batch_size: int = 4, dry_run: bool = False):
     """
-    Post multiple sightings in a single batch post.
+    Post one or more sightings using the unified batch format.
+
+    This is the only posting function needed - it handles 1-4 sightings
+    using the same unified format with contributor statistics.
 
     Args:
-        batch_size: Number of sightings to include (max 4)
+        batch_size: Number of sightings to include (1-4, default: 4)
         dry_run: If True, only show what would be posted without actually posting
     """
     import os
@@ -342,10 +161,13 @@ def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
 def post_sightings_queue():
     """
     Scheduled function that runs daily at 6 PM ET.
-    Recursively processes all unposted sightings:
-    - Posts up to 4 sightings at a time using unified batch format
-    - If 5+ sightings: posts first 4 in batch, then recursively processes remainder
+
+    Processes all unposted sightings using the unified batch format:
+    - Posts up to 4 sightings at a time via post_batch()
+    - If 5+ sightings: posts first 4, then recursively processes remainder
     - If no sightings: exits gracefully
+
+    All posts use the same unified format showing contributor statistics.
     """
     from datetime import datetime
 
@@ -366,7 +188,7 @@ def post_sightings_queue():
 
     # Always use batch format (unified format)
     print(f"Using unified format for {min(num_sightings, 4)} sightings")
-    result = post_multiple_sightings.remote(batch_size=4, dry_run=False)
+    result = post_batch.remote(batch_size=4, dry_run=False)
     print(f"✓ Posted batch: {result}")
 
     # If there are more than 4 sightings, recursively process the remainder
@@ -792,7 +614,8 @@ def main(
     elif command == "stats":
         get_stats.remote()
     elif command == "post":
-        post_single_sighting.remote(limit=limit, dry_run=dry_run)
+        # Use the unified batch posting (works for any number of sightings 1-4)
+        post_batch.remote(batch_size=limit if limit <= 4 else 4, dry_run=dry_run)
     elif command == "upload":
         if not file:
             print("✗ Error: --file is required for upload command")
