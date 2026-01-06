@@ -2,12 +2,9 @@
 
 import io
 import os
-from datetime import datetime
 
 from atproto import Client, client_utils, models
 from PIL import Image
-
-from geolocate.geocoding import Geocoder
 
 
 class BlueskyClient:
@@ -146,37 +143,6 @@ class BlueskyClient:
         response = self.client.send_post(text=text, embed=embed)
         return response
 
-    def _build_sighting_text_parts(
-        self,
-        license_plate: str,
-        sighting_count: int,
-        timestamp: str,
-        latitude: float | None,
-        longitude: float | None,
-        unique_sighted: int,
-        total_fiskers: int,
-    ) -> tuple[str, str, str | None, str | None]:
-        """
-        Build the core parts of a sighting post text.
-
-        Returns:
-            Tuple of (ordinal, formatted_time, progress_bar, location_text)
-        """
-        ordinal = self._get_ordinal(sighting_count)
-        dt = datetime.fromisoformat(timestamp)
-        formatted_time = dt.strftime("%B %d, %Y at %I:%M %p")
-        progress_bar = self._create_progress_bar(unique_sighted, total_fiskers)
-
-        # Get location text if GPS coordinates are available
-        location_text = None
-        if latitude is not None and longitude is not None:
-            geocoder = Geocoder()
-            location_text = geocoder.get_neighborhood_name(latitude, longitude)
-            if not location_text:
-                location_text = f"{latitude:.4f}, {longitude:.4f}"
-
-        return ordinal, formatted_time, progress_bar, location_text
-
     def format_sighting_text(
         self,
         license_plate: str,
@@ -189,52 +155,13 @@ class BlueskyClient:
         contributed_by: str | None = None,
     ) -> str:
         """
+        DEPRECATED: Use create_batch_sighting_post() instead with a single sighting.
+
         Format the text for a sighting post preview.
-
-        Args:
-            license_plate: Vehicle license plate
-            sighting_count: Number of times this plate has been spotted
-            timestamp: When the sighting occurred (ISO format)
-            latitude: GPS latitude (may be None)
-            longitude: GPS longitude (may be None)
-            unique_sighted: Number of unique Fisker plates sighted
-            total_fiskers: Total number of Fisker vehicles in TLC database
-            contributed_by: Optional name of contributor
-
-        Returns:
-            Formatted post text
         """
-        ordinal, formatted_time, progress_bar, location_text = self._build_sighting_text_parts(
-            license_plate,
-            sighting_count,
-            timestamp,
-            latitude,
-            longitude,
-            unique_sighted,
-            total_fiskers,
+        raise DeprecationWarning(
+            "format_sighting_text is deprecated. Use create_batch_sighting_post() with a single sighting instead."
         )
-
-        # Build post text
-        post_text = (
-            f"🌊 Fisker Ocean, plate {license_plate} spotted for the {ordinal} time\n"
-            f"📈 {progress_bar}\n\n"
-            f"📅 {formatted_time}"
-        )
-
-        # Add location if available
-        if location_text:
-            if latitude is not None and longitude is not None:
-                # Check if it's coordinates or a neighborhood name
-                if "," in location_text and "." in location_text:
-                    post_text += f"\n📍 Spotted at {location_text}"
-                else:
-                    post_text += f"\n📍 Spotted in {location_text}"
-
-        # Add contributor line if provided
-        if contributed_by:
-            post_text += f"\n\n🙏 Contributed by {contributed_by}"
-
-        return post_text
 
     def create_sighting_post(
         self,
@@ -249,122 +176,13 @@ class BlueskyClient:
         contributed_by: str | None = None,
     ) -> dict:
         """
-        Create a formatted sighting post for Bluesky.
+        DEPRECATED: Use create_batch_sighting_post() instead with a single sighting.
 
-        Args:
-            license_plate: Vehicle license plate
-            sighting_count: Number of times this plate has been spotted
-            timestamp: When the sighting occurred (ISO format)
-            latitude: GPS latitude (may be None)
-            longitude: GPS longitude (may be None)
-            images: List of image paths (sighting image, and optionally map image)
-            unique_sighted: Number of unique Fisker plates sighted
-            total_fiskers: Total number of Fisker vehicles in TLC database
-            contributed_by: Optional name/handle of contributor (if starts with @, creates mention)
-
-        Returns:
-            Post response from Bluesky API
+        This method has been replaced by the unified batch posting format.
         """
-        # Build post using TextBuilder to support mentions
-        text_builder = client_utils.TextBuilder()
-
-        # Get text parts using shared logic
-        ordinal, formatted_time, progress_bar, location_text = self._build_sighting_text_parts(
-            license_plate,
-            sighting_count,
-            timestamp,
-            latitude,
-            longitude,
-            unique_sighted,
-            total_fiskers,
+        raise DeprecationWarning(
+            "create_sighting_post is deprecated. Use create_batch_sighting_post() with a single sighting instead."
         )
-
-        # Add main post content
-        text_builder.text(
-            f"🌊 Fisker Ocean, plate {license_plate} spotted for the {ordinal} time\n"
-            f"📈 {progress_bar}\n\n"
-            f"📅 {formatted_time}"
-        )
-
-        # Add location if available
-        if location_text:
-            # Check if it's coordinates or a neighborhood name
-            if "," in location_text and "." in location_text:
-                text_builder.text(f"\n📍 Spotted at {location_text}")
-            else:
-                text_builder.text(f"\n📍 Spotted in {location_text}")
-
-        # Add contributor with mention support
-        if contributed_by:
-            if contributed_by.startswith("@"):
-                # Extract handle (remove @ prefix)
-                handle = contributed_by[1:]
-
-                try:
-                    # Resolve handle to DID
-                    profile = self.client.get_profile(handle)
-
-                    # Add mention
-                    text_builder.text("\n\n🙏 Contributed by ")
-                    text_builder.mention(contributed_by, profile.did)
-                except Exception as e:
-                    # If resolution fails, fall back to plain text
-                    print(f"Warning: Could not resolve handle {handle}, using plain text: {e}")
-                    text_builder.text(f"\n\n🙏 Contributed by {contributed_by}")
-            else:
-                # Plain text contributor
-                text_builder.text(f"\n\n🙏 Contributed by {contributed_by}")
-
-        # Generate alt text for images
-        image_alts = []
-
-        # Alt text for sighting image
-        if latitude is not None and longitude is not None:
-            geocoder = Geocoder()
-            location_text = geocoder.get_neighborhood_name(latitude, longitude)
-
-            if location_text:
-                location_for_alt = location_text
-            else:
-                location_for_alt = f"coordinates {latitude:.4f}, {longitude:.4f}"
-
-            image_alts.append(
-                f"Spotted a Fisker Ocean with plate {license_plate} in {location_for_alt}"
-            )
-        else:
-            image_alts.append(f"Spotted a Fisker Ocean with plate {license_plate}")
-
-        # Alt text for map image (if present)
-        if len(images) > 1:
-            if latitude is not None and longitude is not None:
-                geocoder = Geocoder()
-                location_text = geocoder.get_neighborhood_name(latitude, longitude)
-
-                if location_text:
-                    location_for_alt = location_text
-                else:
-                    location_for_alt = f"coordinates {latitude:.4f}, {longitude:.4f}"
-
-                image_alts.append(
-                    f"Map of the location the Fisker Ocean was spotted in {location_for_alt}"
-                )
-            else:
-                image_alts.append("Map image")
-
-        # Upload images with alt text
-        embed = None
-        if images:
-            if len(images) > 4:
-                raise ValueError("Bluesky supports a maximum of 4 images per post")
-
-            uploaded_images = [
-                self.upload_image(img, alt) for img, alt in zip(images, image_alts, strict=False)
-            ]
-            embed = models.AppBskyEmbedImages.Main(images=uploaded_images)
-
-        # Send post with TextBuilder
-        response = self.client.send_post(text_builder, embed=embed)
-        return response
 
     @staticmethod
     def _get_ordinal(n: int) -> str:
@@ -376,10 +194,14 @@ class BlueskyClient:
         return f"{n}{suffix}"
 
     def create_batch_sighting_post(
-        self, sightings: list[tuple], unique_sighted: int, total_fiskers: int
+        self,
+        sightings: list[tuple],
+        unique_sighted: int,
+        total_fiskers: int,
+        contributor_stats: dict[int, int] | None = None,
     ) -> dict:
         """
-        Create a batch post for multiple sightings.
+        Create a unified post for one or more sightings.
 
         Args:
             sightings: List of sighting tuples from get_unposted_sightings()
@@ -387,6 +209,7 @@ class BlueskyClient:
                  contributor_id, preferred_name, bluesky_handle, phone_number)
             unique_sighted: Number of unique Fisker plates sighted
             total_fiskers: Total number of Fisker vehicles in TLC database
+            contributor_stats: Optional dict mapping contributor_id to total all-time sighting count
 
         Returns:
             Post response from Bluesky API
@@ -397,69 +220,74 @@ class BlueskyClient:
         if len(sightings) > 4:
             raise ValueError("Maximum 4 sightings per batch post (Bluesky image limit)")
 
-        # Extract unique contributors with display names
-        # Sighting tuple: (id, license_plate, timestamp, lat, lon, image_path, created_at, post_uri,
-        #                  contributor_id, preferred_name, bluesky_handle, phone_number)
-        contributor_display_names = set()
-        unique_contributor_ids = set()
+        # Extract license plates
+        plates = [sighting[1] for sighting in sightings]  # license_plate column
+
+        # Build contributor statistics
+        # contributor_id -> {display_name, count_in_batch, total_count}
+        contributor_info = {}
         for sighting in sightings:
             contributor_id = sighting[8]  # contributor_id
             preferred_name = sighting[9]  # preferred_name
             bluesky_handle = sighting[10]  # bluesky_handle
 
-            if contributor_id is not None:
-                unique_contributor_ids.add(contributor_id)
+            if contributor_id is None or contributor_id == 1:
+                # Skip default/anonymous contributor
+                continue
 
-                # Skip adding display name for contributor id = 1
-                if contributor_id == 1:
-                    continue
+            if contributor_id not in contributor_info:
+                # Determine display name
+                display_name = preferred_name if preferred_name else bluesky_handle
+                if display_name is None:
+                    display_name = "Anonymous"
 
-                if preferred_name:
-                    contributor_display_names.add(preferred_name)
-                elif bluesky_handle:
-                    contributor_display_names.add(bluesky_handle)
-            # If neither, they remain anonymous (not added to set)
+                contributor_info[contributor_id] = {
+                    "display_name": display_name,
+                    "count_in_batch": 0,
+                    "total_count": (
+                        contributor_stats.get(contributor_id, 0) if contributor_stats else 0
+                    ),
+                }
 
-        # Extract license plates
-        plates = [sighting[1] for sighting in sightings]  # license_plate column
+            contributor_info[contributor_id]["count_in_batch"] += 1
 
         # Build post text
         text_builder = client_utils.TextBuilder()
 
-        # Header
+        # Header with sighting count
         sighting_word = "sighting" if len(sightings) == 1 else "sightings"
-
-        # Count contributors (excluding id = 1)
-        num_contributors_to_show = len(unique_contributor_ids - {1})
-
-        text_builder.text(f"🌊 {len(sightings)} new {sighting_word}")
-
-        if num_contributors_to_show > 0:
-            contributor_word = "contributor" if num_contributors_to_show == 1 else "contributors"
-            text_builder.text(f" from {num_contributors_to_show} {contributor_word}\n")
-        else:
-            text_builder.text("\n")
-
-        # Progress bar
-        progress_bar = self._create_progress_bar(unique_sighted, total_fiskers)
-        text_builder.text(f"📈 {progress_bar}\n\n")
+        text_builder.text(f"🌊 +{len(sightings)} {sighting_word} in the last 24 hours\n")
 
         # License plates
         plates_text = ", ".join(plates)
-        text_builder.text(f"🚗 {plates_text}")
+        text_builder.text(f"🚗 {plates_text}\n")
 
-        # Add contributors with mentions
-        if contributor_display_names:
-            text_builder.text("\n\n🙏 Thanks to: ")
+        # Progress bar
+        progress_bar = self._create_progress_bar(unique_sighted, total_fiskers)
+        text_builder.text(f"📈 {progress_bar}")
 
-            contributor_list = sorted(list(contributor_display_names))
-            for i, display_name in enumerate(contributor_list):
+        # Add contributor statistics
+        if contributor_info:
+            text_builder.text("\n\n")
+
+            # Sort contributors by display name
+            sorted_contributors = sorted(
+                contributor_info.items(), key=lambda x: x[1]["display_name"].lower()
+            )
+
+            for _contributor_id, info in sorted_contributors:
+                display_name = info["display_name"]
+                count_in_batch = info["count_in_batch"]
+                total_count = info["total_count"]
+
+                # Format: * Sam +1 → 55
+                text_builder.text("* ")
+
+                # Add display name with mention support if it's a handle
                 if display_name.startswith("@"):
-                    # Extract handle (remove @ prefix)
                     handle = display_name[1:]
-
                     try:
-                        # Resolve handle to DID
+                        # Resolve handle to DID for mention
                         profile = self.client.get_profile(handle)
                         text_builder.mention(display_name, profile.did)
                     except Exception as e:
@@ -467,12 +295,9 @@ class BlueskyClient:
                         print(f"Warning: Could not resolve handle {handle}, using plain text: {e}")
                         text_builder.text(display_name)
                 else:
-                    # Plain text contributor name
                     text_builder.text(display_name)
 
-                # Add comma separator if not last
-                if i < len(contributor_list) - 1:
-                    text_builder.text(", ")
+                text_builder.text(f" +{count_in_batch} → {total_count}\n")
 
         # Collect images (max 4)
         images = []
@@ -495,15 +320,6 @@ class BlueskyClient:
         # Send post
         response = self.client.send_post(text_builder, embed=embed)
         return response
-
-    @staticmethod
-    def _get_ordinal(n: int) -> str:
-        """Convert number to ordinal string (1st, 2nd, 3rd, etc.)"""
-        if 11 <= (n % 100) <= 13:
-            suffix = "th"
-        else:
-            suffix = ["th", "st", "nd", "rd", "th"][min(n % 10, 4)]
-        return f"{n}{suffix}"
 
     @staticmethod
     def _create_progress_bar(current: int, total: int, bar_length: int = 10) -> str:

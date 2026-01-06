@@ -329,6 +329,29 @@ class SightingsDatabase:
 
         return count
 
+    def get_all_contributor_sighting_counts(self) -> dict[int, int]:
+        """Get sighting counts for all contributors.
+
+        Returns:
+            Dictionary mapping contributor_id to their total sighting count
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT contributor_id, COUNT(*) as count
+            FROM sightings
+            WHERE contributor_id IS NOT NULL
+            GROUP BY contributor_id
+        """
+        )
+
+        counts = {row[0]: row[1] for row in cursor.fetchall()}
+        conn.close()
+
+        return counts
+
     def get_all_sightings(self, license_plate: str = None):
         """Get all sightings, optionally filtered by license plate."""
         conn = self._get_connection()

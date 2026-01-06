@@ -41,34 +41,53 @@ response = client.create_post("Hello from Oceans of NYC!")
 print(f"Posted: {response.uri}")
 ```
 
-### Create a Post with Images
+### Create a Sighting Post
 
 ```python
-response = client.create_post(
-    text="🌊 Fisker Ocean sighting!",
-    images=["path/to/sighting.jpg", "path/to/map.png"],
-    image_alts=[
-        "Fisker Ocean spotted in Manhattan",
-        "Map showing sighting location"
-    ]
+from database import SightingsDatabase
+
+db = SightingsDatabase()
+
+# Get unposted sightings
+sightings = db.get_unposted_sightings()
+
+# Get statistics
+unique_sighted = db.get_unique_sighted_count()
+total_fiskers = db.get_tlc_vehicle_count()
+contributor_stats = db.get_all_contributor_sighting_counts()
+
+# Post one or more sightings (max 4)
+response = client.create_batch_sighting_post(
+    sightings=sightings[:4],  # Up to 4 sightings
+    unique_sighted=unique_sighted,
+    total_fiskers=total_fiskers,
+    contributor_stats=contributor_stats,
 )
+
+print(f"Posted: {response.uri}")
 ```
 
 ## Post Format
 
-Posts follow this format:
+All posts now use a unified batch format that shows contributor statistics:
 
 ```
-🌊 Fisker Ocean sighting!
+🌊 +2 sightings in the last 24 hours
+🚗 T744480C, T720313C
+📈 3.2% ▒▒▒▒▒▒▒▒▒▒ (67 out of 2093)
 
-🚗 Plate: T731580C
-📈 2 out of 2053 Oceans collected
-🔢 This is the 1st sighting of this vehicle
-📅 November 15, 2025 at 11:18 AM
-📍 Spotted in Alphabet City, Manhattan
-
-🙏 Contributed by @spotter.bsky.social
+* Airlineflyer.net +2 → 16
+* Andy +1 → 4
+* Sam +1 → 55
 ```
+
+**Format Details:**
+- **Header**: Number of sightings in this post
+- **Plates**: Comma-separated list of license plates
+- **Progress**: Percentage with progress bar showing unique vehicles spotted vs total TLC fleet
+- **Contributors**: Each contributor shows:
+  - `+N` = sightings in this post
+  - `→ Total` = all-time total sightings by this contributor
 
 ## Module Structure
 

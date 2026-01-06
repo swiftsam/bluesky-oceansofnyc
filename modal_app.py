@@ -296,10 +296,16 @@ def post_multiple_sightings(batch_size: int = 4, dry_run: bool = False):
         }
 
     try:
+        # Get contributor statistics
+        contributor_stats = db.get_all_contributor_sighting_counts()
+
         # Post to Bluesky
         client = BlueskyClient()
         response = client.create_batch_sighting_post(
-            sightings=sightings_to_post, unique_sighted=unique_sighted, total_fiskers=total_fiskers
+            sightings=sightings_to_post,
+            unique_sighted=unique_sighted,
+            total_fiskers=total_fiskers,
+            contributor_stats=contributor_stats,
         )
 
         # Mark all sightings as posted
@@ -337,18 +343,13 @@ def post_sightings_queue():
     """
     Scheduled function that runs daily at 6 PM ET.
     Recursively processes all unposted sightings:
-    - If 1 sighting: uses single-sighting format with full details
-    - If 2-4 sightings: uses batch format
+    - Posts up to 4 sightings at a time using unified batch format
     - If 5+ sightings: posts first 4 in batch, then recursively processes remainder
     - If no sightings: exits gracefully
     """
-    import os
     from datetime import datetime
-    from pathlib import Path
 
     from database import SightingsDatabase
-    from geolocate import generate_map
-    from post.bluesky import BlueskyClient
 
     print(f"⏰ Scheduled sightings queue post triggered at {datetime.now()}")
 
@@ -363,129 +364,28 @@ def post_sightings_queue():
     num_sightings = len(sightings)
     print(f"Found {num_sightings} unposted sighting(s)")
 
-    if num_sightings == 1:
-        # Use single-sighting format for one sighting
-        print("Using single-sighting format")
-        sighting = sightings[0]
-        (
-            sighting_id,
-            license_plate,
-            timestamp,
-            latitude,
-            longitude,
-            image_path,
-            created_at,
-            post_uri,
-            contributor_id,
-            preferred_name,
-            bluesky_handle,
-            phone_number,
-        ) = sighting
+    # Always use batch format (unified format)
+    print(f"Using unified format for {min(num_sightings, 4)} sightings")
+    result = post_multiple_sightings.remote(batch_size=4, dry_run=False)
+    print(f"✓ Posted batch: {result}")
 
-        try:
-            # Ensure directories exist
-            os.makedirs(IMAGES_PATH, exist_ok=True)
-            os.makedirs(MAPS_PATH, exist_ok=True)
+    # If there are more than 4 sightings, recursively process the remainder
+    if num_sightings > 4:
+        print(f"\n🔄 {num_sightings - 4} sightings remaining, processing next batch...")
+        import time
 
-            # Get statistics
-            sighting_count = db.get_sighting_count(license_plate)
-            unique_sighted = db.get_unique_sighted_count()
-            total_fiskers = db.get_tlc_vehicle_count()
+        time.sleep(2)  # Brief pause between batches
+        next_result = post_sightings_queue.remote()
 
-            # Determine contributor display name
-            contributed_by = None
-            if contributor_id and contributor_id != 1:
-                if bluesky_handle:
-                    contributed_by = (
-                        bluesky_handle if bluesky_handle.startswith("@") else f"@{bluesky_handle}"
-                    )
-                elif preferred_name:
-                    contributed_by = preferred_name
+        # Combine results
+        total_posted = result.get("posted", 0) + next_result.get("posted", 0)
+        return {
+            "posted": total_posted,
+            "batches": 2,
+            "message": f"Posted {total_posted} sightings across multiple batches",
+        }
 
-            # Prepare images
-            images = []
-            image_filename = Path(image_path).name if image_path else None
-            volume_image_path = f"{IMAGES_PATH}/{image_filename}" if image_filename else None
-
-            if volume_image_path and os.path.exists(volume_image_path):
-                images.append(volume_image_path)
-                print(f"✓ Found image: {image_filename}")
-            else:
-                print(f"⚠ Image not found: {image_filename}")
-
-            # Generate map if we have coordinates
-            if latitude and longitude:
-                map_filename = f"map_{sighting_id}.png"
-                map_path = f"{MAPS_PATH}/{map_filename}"
-
-                if not os.path.exists(map_path):
-                    try:
-                        print("🗺 Generating map...")
-                        generate_map(latitude, longitude, map_path)
-                        volume.commit()
-                        print(f"✓ Map generated: {map_filename}")
-                    except Exception as e:
-                        print(f"⚠ Could not generate map: {e}")
-
-                if os.path.exists(map_path):
-                    images.append(map_path)
-
-            # Post to Bluesky using single-sighting format
-            client = BlueskyClient()
-            response = client.create_sighting_post(
-                license_plate=license_plate,
-                sighting_count=sighting_count,
-                timestamp=timestamp,
-                latitude=latitude,
-                longitude=longitude,
-                images=images,
-                unique_sighted=unique_sighted,
-                total_fiskers=total_fiskers,
-                contributed_by=contributed_by,
-            )
-
-            # Mark as posted
-            db.mark_as_posted(sighting_id, response.uri)
-
-            result = {
-                "posted": 1,
-                "post_uri": response.uri,
-                "plate": license_plate,
-                "message": "Posted 1 sighting (single format)",
-            }
-            print(f"✓ Scheduled post complete: {result}")
-            return result
-
-        except Exception as e:
-            print(f"✗ Error posting sighting: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return {"posted": 0, "error": str(e), "message": f"Failed to post: {e}"}
-
-    else:
-        # Use batch format for multiple sightings (2+)
-        print(f"Using batch format for {min(num_sightings, 4)} sightings")
-        result = post_multiple_sightings.remote(batch_size=4, dry_run=False)
-        print(f"✓ Posted batch: {result}")
-
-        # If there are more than 4 sightings, recursively process the remainder
-        if num_sightings > 4:
-            print(f"\n🔄 {num_sightings - 4} sightings remaining, processing next batch...")
-            import time
-
-            time.sleep(2)  # Brief pause between batches
-            next_result = post_sightings_queue.remote()
-
-            # Combine results
-            total_posted = result.get("posted", 0) + next_result.get("posted", 0)
-            return {
-                "posted": total_posted,
-                "batches": 2,
-                "message": f"Posted {total_posted} sightings across multiple batches",
-            }
-
-        return result
+    return result
 
 
 @app.function(

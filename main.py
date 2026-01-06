@@ -270,93 +270,57 @@ def search_plate(pattern: str):
 @cli.command()
 @click.argument("sighting_id", type=int)
 def post(sighting_id: int):
-    """Post a sighting to Bluesky by its database ID."""
-    from geolocate.maps import MapGenerator
+    """Post a sighting to Bluesky by its database ID using the unified format."""
     from post.bluesky import BlueskyClient
 
     try:
         db = SightingsDatabase()
 
-        import sqlite3
+        # Get the sighting with contributor info using get_unposted_sightings format
+        sightings = db.get_unposted_sightings()
 
-        conn = sqlite3.connect(db.db_path)
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT * FROM sightings WHERE id = ?", (sighting_id,))
-        sighting = cursor.fetchone()
-        conn.close()
+        # Find the specific sighting by ID
+        sighting = None
+        for s in sightings:
+            if s[0] == sighting_id:
+                sighting = s
+                break
 
         if not sighting:
-            click.echo(f"Error: No sighting found with ID {sighting_id}", err=True)
+            click.echo(f"Error: No unposted sighting found with ID {sighting_id}", err=True)
             raise click.Abort()
 
-        # Unpack sighting data
-        # Schema: id, license_plate, timestamp, latitude, longitude, image_path, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
-        sighting_id = sighting[0]
+        # Get statistics
+        unique_sighted = db.get_unique_sighted_count()
+        total_fiskers = db.get_tlc_vehicle_count()
+        contributor_stats = db.get_all_contributor_sighting_counts()
+
+        # Extract sighting info for preview
         license_plate = sighting[1]
-        timestamp = sighting[2]
-        latitude = sighting[3]
-        longitude = sighting[4]
-        image_path = sighting[5]
-        # sighting[6] is created_at
-        # sighting[7] is post_uri
-        # sighting[8] is contributor_id (not used here)
+        contributor_id = sighting[8]
         preferred_name = sighting[9]
         bluesky_handle = sighting[10]
 
-        db = SightingsDatabase()
-
-        # Use posted count for accurate numbering
-        posted_count = db.get_posted_sighting_count(license_plate)
-        sighting_count = posted_count + 1
-
-        # For unique count: get posted unique count, and add 1 if this plate hasn't been posted before
-        unique_posted = db.get_unique_posted_count()
-        if posted_count == 0:
-            unique_sighted = unique_posted + 1
+        # Determine contributor display name
+        contributor_name = "Unknown"
+        if contributor_id and contributor_id != 1:
+            if preferred_name:
+                contributor_name = preferred_name
+            elif bluesky_handle:
+                contributor_name = bluesky_handle
+            total_count = contributor_stats.get(contributor_id, 0)
         else:
-            unique_sighted = unique_posted
-
-        total_fiskers = db.get_tlc_vehicle_count()
-
-        # Construct contributed_by for post
-        contributed_by = None
-        if preferred_name:
-            contributed_by = preferred_name
-        elif bluesky_handle:
-            contributed_by = bluesky_handle
-
-        bluesky = BlueskyClient()
-
-        # Generate map only if GPS coordinates are available
-        map_path = None
-        if latitude is not None and longitude is not None:
-            click.echo("\nGenerating map image...")
-            map_gen = MapGenerator()
-            map_path = map_gen.generate_sighting_map(
-                latitude=latitude, longitude=longitude, license_plate=license_plate
-            )
-            click.echo(f"✓ Map saved to: {map_path}")
-
-        post_text = bluesky.format_sighting_text(
-            license_plate=license_plate,
-            sighting_count=sighting_count,
-            timestamp=timestamp,
-            latitude=latitude,
-            longitude=longitude,
-            unique_sighted=unique_sighted,
-            total_fiskers=total_fiskers,
-            contributed_by=contributed_by,
-        )
+            total_count = 0
 
         click.echo("\n" + "=" * 60)
-        click.echo("POST PREVIEW")
+        click.echo("POST PREVIEW (Unified Format)")
         click.echo("=" * 60)
-        click.echo(post_text)
-        click.echo("\nImages:")
-        click.echo(f"  1. {image_path}")
-        if map_path:
-            click.echo(f"  2. {map_path}")
+        click.echo("🌊 +1 sighting in the last 24 hours")
+        click.echo(f"🚗 {license_plate}")
+        progress_bar = f"{(unique_sighted / total_fiskers * 100):.1f}%"
+        click.echo(f"📈 {progress_bar} ({unique_sighted} out of {total_fiskers})")
+        if contributor_id and contributor_id != 1:
+            click.echo(f"\n* {contributor_name} +1 → {total_count}")
         click.echo("=" * 60 + "\n")
 
         if not click.confirm("Do you want to post this to Bluesky?"):
@@ -365,21 +329,12 @@ def post(sighting_id: int):
 
         click.echo("\nPosting to Bluesky...")
 
-        # Build images list - include map only if it exists
-        images = [image_path]
-        if map_path:
-            images.append(map_path)
-
-        response = bluesky.create_sighting_post(
-            license_plate=license_plate,
-            sighting_count=sighting_count,
-            timestamp=timestamp,
-            latitude=latitude,
-            longitude=longitude,
-            images=images,
+        bluesky = BlueskyClient()
+        response = bluesky.create_batch_sighting_post(
+            sightings=[sighting],
             unique_sighted=unique_sighted,
             total_fiskers=total_fiskers,
-            contributed_by=contributed_by,
+            contributor_stats=contributor_stats,
         )
 
         # Mark as posted
@@ -669,7 +624,6 @@ def batch_post(limit: int = None, preview: bool = False):
     - Posts to Bluesky with confirmation (default: Yes)
     - Records post_uri in database
     """
-    from geolocate.maps import MapGenerator
     from post.bluesky import BlueskyClient
 
     try:
@@ -731,9 +685,9 @@ def batch_post(limit: int = None, preview: bool = False):
             # Schema: id, license_plate, timestamp, latitude, longitude, image_path, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
             sighting_id = sighting[0]
             license_plate = sighting[1]
-            timestamp = sighting[2]
-            latitude = sighting[3]
-            longitude = sighting[4]
+            # timestamp = sighting[2]  # Not used in new format
+            # latitude = sighting[3]  # Not used in new format
+            # longitude = sighting[4]  # Not used in new format
             image_path = sighting[5]
             # sighting[6] is created_at
             # sighting[7] is post_uri
@@ -745,57 +699,33 @@ def batch_post(limit: int = None, preview: bool = False):
             click.echo(f"Sighting {idx}/{len(unposted)} (ID: {sighting_id})")
             click.echo(f"{'='*60}\n")
 
-            # Get counts for post
-            # Use posted count + 1 since this will be the next post for this plate
-            posted_count = db.get_posted_sighting_count(license_plate)
-            sighting_count = posted_count + 1
-
-            # For unique count: get posted unique count, and add 1 if this plate hasn't been posted before
-            unique_posted = db.get_unique_posted_count()
-            if posted_count == 0:
-                # This plate hasn't been posted before, so it's a new unique plate
-                unique_sighted = unique_posted + 1
-            else:
-                # This plate has been posted before, so unique count stays the same
-                unique_sighted = unique_posted
-
+            # Get statistics for post
+            unique_sighted = db.get_unique_sighted_count()
             total_fiskers = db.get_tlc_vehicle_count()
+            contributor_stats = db.get_all_contributor_sighting_counts()
 
-            # Construct contributed_by for post
-            contributed_by = None
-            if preferred_name:
-                contributed_by = preferred_name
-            elif bluesky_handle:
-                contributed_by = bluesky_handle
+            contributor_id = sighting[8]
+            contributor_name = "Unknown"
+            total_count = 0
 
-            # Generate map only if GPS coordinates are available
-            map_path = None
-            if latitude is not None and longitude is not None:
-                map_gen = MapGenerator()
-                map_path = map_gen.generate_sighting_map(
-                    latitude=latitude, longitude=longitude, license_plate=license_plate
-                )
+            if contributor_id and contributor_id != 1:
+                if preferred_name:
+                    contributor_name = preferred_name
+                elif bluesky_handle:
+                    contributor_name = bluesky_handle
+                total_count = contributor_stats.get(contributor_id, 0)
 
-            # Format post preview
-            bluesky = BlueskyClient()
-            post_text = bluesky.format_sighting_text(
-                license_plate=license_plate,
-                sighting_count=sighting_count,
-                timestamp=timestamp,
-                latitude=latitude,
-                longitude=longitude,
-                unique_sighted=unique_sighted,
-                total_fiskers=total_fiskers,
-                contributed_by=contributed_by,
-            )
-
-            click.echo("POST PREVIEW")
+            # Format post preview in new unified format
+            click.echo("POST PREVIEW (Unified Format)")
             click.echo("=" * 60)
-            click.echo(post_text)
+            click.echo("🌊 +1 sighting in the last 24 hours")
+            click.echo(f"🚗 {license_plate}")
+            progress_bar = f"{(unique_sighted / total_fiskers * 100):.1f}%"
+            click.echo(f"📈 {progress_bar} ({unique_sighted} out of {total_fiskers})")
+            if contributor_id and contributor_id != 1:
+                click.echo(f"\n* {contributor_name} +1 → {total_count}")
             click.echo("\nImages:")
             click.echo(f"  1. {image_path}")
-            if map_path:
-                click.echo(f"  2. {map_path}")
             click.echo("=" * 60 + "\n")
 
             # Ask to post with default Yes
@@ -803,21 +733,18 @@ def batch_post(limit: int = None, preview: bool = False):
                 click.echo("\nPosting to Bluesky...")
 
                 try:
-                    # Build images list - include map only if it exists
-                    images = [image_path]
-                    if map_path:
-                        images.append(map_path)
+                    # Initialize client
+                    bluesky = BlueskyClient()
 
-                    response = bluesky.create_sighting_post(
-                        license_plate=license_plate,
-                        sighting_count=sighting_count,
-                        timestamp=timestamp,
-                        latitude=latitude,
-                        longitude=longitude,
-                        images=images,
+                    # Get contributor statistics
+                    contributor_stats = db.get_all_contributor_sighting_counts()
+
+                    # Post using unified batch format (with single sighting)
+                    response = bluesky.create_batch_sighting_post(
+                        sightings=[sighting],
                         unique_sighted=unique_sighted,
                         total_fiskers=total_fiskers,
-                        contributed_by=contributed_by,
+                        contributor_stats=contributor_stats,
                     )
 
                     # Mark as posted
@@ -956,8 +883,14 @@ def multi_post(batch_size: int = 4, preview: bool = False):
         click.echo("\nPosting to Bluesky...")
         bluesky = BlueskyClient()
 
+        # Get contributor statistics
+        contributor_stats = db.get_all_contributor_sighting_counts()
+
         response = bluesky.create_batch_sighting_post(
-            sightings=sightings_to_post, unique_sighted=unique_sighted, total_fiskers=total_fiskers
+            sightings=sightings_to_post,
+            unique_sighted=unique_sighted,
+            total_fiskers=total_fiskers,
+            contributor_stats=contributor_stats,
         )
 
         # Mark all sightings as posted
