@@ -256,7 +256,7 @@ class BlueskyClient:
 
         # Header with sighting count
         sighting_word = "sighting" if len(sightings) == 1 else "sightings"
-        text_builder.text(f"🌊 +{len(sightings)} {sighting_word} in the last 24 hours\n")
+        text_builder.text(f"🌊 +{len(sightings)} {sighting_word}\n")
 
         # License plates
         plates_text = ", ".join(plates)
