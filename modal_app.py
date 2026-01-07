@@ -589,6 +589,181 @@ def backfill_image_hashes(batch_size: int = 100, dry_run: bool = False):
     }
 
 
+@app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume}, timeout=3600)
+def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
+    """
+    Backfill existing images to Cloudflare R2 and update database URLs.
+
+    This function:
+    1. Finds all sightings without image_url_web
+    2. Creates web-optimized versions from originals (or from image_path if no original)
+    3. Uploads to R2
+    4. Updates database with R2 URLs
+
+    Args:
+        batch_size: Number of images to process before committing (default: 10)
+        dry_run: If True, show what would be done without uploading or updating database
+    """
+    import os
+
+    from database import SightingsDatabase
+    from utils.image_processor import ImageProcessor
+    from utils.r2_storage import R2Storage
+
+    print("🔄 Starting R2 backfill on Modal...")
+    print(f"   Batch size: {batch_size}")
+    if dry_run:
+        print("   DRY RUN MODE - no uploads or changes will be made")
+    print()
+
+    db = SightingsDatabase()
+    conn = db._get_connection()
+    cursor = conn.cursor()
+
+    # Get all sightings without R2 URLs
+    cursor.execute(
+        """
+        SELECT id, image_path, image_path_original
+        FROM sightings
+        WHERE image_url_web IS NULL
+        ORDER BY id ASC
+        """
+    )
+
+    sightings = cursor.fetchall()
+    total = len(sightings)
+
+    if total == 0:
+        print("✓ All sightings already have R2 URLs!")
+        conn.close()
+        return {"status": "complete", "processed": 0, "successful": 0, "skipped": 0}
+
+    print(f"Found {total} sightings without R2 URLs\n")
+
+    # Initialize processors
+    processor = ImageProcessor(volume_path=VOLUME_PATH)
+    r2: R2Storage | None
+    if not dry_run:
+        r2 = R2Storage()
+    else:
+        r2 = None
+
+    processed = 0
+    successful = 0
+    skipped = 0
+    failed = []
+
+    for sighting_id, image_path, image_path_original in sightings:
+        processed += 1
+
+        # Determine source image path (prefer original, fallback to image_path)
+        source_path = image_path_original if image_path_original else image_path
+
+        if not source_path:
+            print(f"⚠️  Sighting #{sighting_id}: No image path found")
+            skipped += 1
+            failed.append((sighting_id, None, "No image path"))
+            continue
+
+        # Check if file exists
+        if not os.path.exists(source_path):
+            print(f"⚠️  Sighting #{sighting_id}: Image file not found: {source_path}")
+            skipped += 1
+            failed.append((sighting_id, source_path, "File not found"))
+            continue
+
+        try:
+            # Extract filename for R2 key
+            from pathlib import Path
+
+            filename = Path(source_path).name
+            # Replace extension with .jpg for web version
+            web_filename = Path(filename).stem + "_web.jpg"
+            r2_key = f"sightings/{web_filename}"
+
+            # Create web-optimized version
+            web_bytes, _ = processor.create_web_version(source_path)
+
+            if dry_run:
+                print(
+                    f"[DRY RUN] Would upload sighting #{sighting_id}: "
+                    f"{len(web_bytes)} bytes → {r2_key}"
+                )
+                successful += 1
+            elif r2 is not None:
+                # Upload to R2
+                web_url = r2.upload_bytes(web_bytes, r2_key, content_type="image/jpeg")
+
+                # Update database
+                cursor.execute(
+                    """
+                    UPDATE sightings
+                    SET image_url_web = %s
+                    WHERE id = %s
+                    """,
+                    (web_url, sighting_id),
+                )
+
+                print(f"✓ Sighting #{sighting_id}: Uploaded to {web_url}")
+                successful += 1
+
+                # Commit in batches
+                if successful % batch_size == 0:
+                    conn.commit()
+                    print(
+                        f"✓ Committed batch of {batch_size} updates (total: {successful}/{total})"
+                    )
+
+        except Exception as e:
+            print(f"❌ Sighting #{sighting_id}: Failed: {e}")
+            failed.append((sighting_id, source_path, str(e)))
+            continue
+
+    # Final commit
+    if not dry_run and successful > 0:
+        conn.commit()
+        print("\n✓ Final commit completed")
+
+    # Commit volume changes
+    volume.commit()
+
+    conn.close()
+
+    # Summary
+    print("\n" + "=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
+    print(f"Total sightings processed: {processed}")
+    print(f"Successfully uploaded:      {successful}")
+    print(f"Skipped (no file):         {skipped}")
+    print(f"Failed:                    {len(failed)}")
+
+    if failed and len(failed) <= 10:
+        print("\nFailed sightings:")
+        for sighting_id, image_path, error in failed:
+            print(f"  #{sighting_id}: {error}")
+            if image_path:
+                print(f"    Path: {image_path}")
+    elif failed:
+        print(f"\n{len(failed)} sightings failed (showing first 10):")
+        for sighting_id, _image_path, error in failed[:10]:
+            print(f"  #{sighting_id}: {error}")
+
+    if dry_run:
+        print("\n⚠️  DRY RUN - no uploads or changes were made")
+    else:
+        print(f"\n✅ Backfill complete! Uploaded {successful}/{total} images to R2")
+
+    return {
+        "status": "complete",
+        "processed": processed,
+        "successful": successful,
+        "skipped": skipped,
+        "failed": len(failed),
+        "dry_run": dry_run,
+    }
+
+
 @app.local_entrypoint()
 def main(
     command: str = "stats",
@@ -659,8 +834,12 @@ def main(
         print("🔄 Backfilling image hashes...")
         result = backfill_image_hashes.remote(batch_size=100, dry_run=dry_run)
         print(f"\n✓ Backfill result: {result}")
+    elif command == "backfill-r2":
+        print("🔄 Backfilling images to R2...")
+        result = backfill_r2_images.remote(batch_size=10, dry_run=dry_run)
+        print(f"\n✓ Backfill result: {result}")
     else:
         print(f"Unknown command: {command}")
         print(
-            "Available commands: test, stats, post, upload, sync-images, update-tlc, backfill-hashes"
+            "Available commands: test, stats, post, upload, sync-images, update-tlc, backfill-hashes, backfill-r2"
         )
