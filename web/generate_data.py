@@ -39,7 +39,6 @@ def generate_vehicle_data():
             LIMIT 1
         ) s ON true
         ORDER BY
-            CASE WHEN s.image_path IS NOT NULL THEN 0 ELSE 1 END,
             t.dmv_license_plate_number
     """)
 
