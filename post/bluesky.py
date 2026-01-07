@@ -190,10 +190,6 @@ class BlueskyClient:
             preferred_name = sighting[9]  # preferred_name
             bluesky_handle = sighting[10]  # bluesky_handle
 
-            if contributor_id is None or contributor_id == 1:
-                # Skip default/anonymous contributor
-                continue
-
             if contributor_id not in contributor_info:
                 # Determine display name
                 display_name = preferred_name if preferred_name else bluesky_handle
