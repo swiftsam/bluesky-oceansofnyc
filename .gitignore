@@ -17,10 +17,6 @@ data/
 
 # Images
 images/
-*.jpg
-*.jpeg
-*.png
-*.gif
 
 # Maps
 maps/
@@ -31,3 +27,5 @@ maps/
 
 # Modal
 .modal/
+fiskers_of_nyc_logo.png
+oceans-of-nyc-architecture.png
