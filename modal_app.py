@@ -32,6 +32,7 @@ image = (
     .add_local_python_source("chat")
     .add_local_python_source("notify")
     .add_local_python_source("utils")
+    .add_local_python_source("web")
 )
 
 # Define secrets
@@ -589,6 +590,32 @@ def backfill_image_hashes(batch_size: int = 100, dry_run: bool = False):
     }
 
 
+@app.function(image=image, secrets=secrets)
+def generate_web_data():
+    """
+    Generate vehicles.json and upload to R2 at /web/vehicles.json.
+
+    This function queries the database for all TLC vehicles and their most recent
+    sightings, then generates a JSON file and uploads it to R2 for the static website.
+
+    Can be triggered manually via: modal run modal_app.py --command=generate-web-data
+    """
+    from web.generate_data import generate_vehicle_data
+
+    print("🔄 Generating vehicle data for web...")
+    result = generate_vehicle_data(upload_to_r2=True)
+
+    if result["status"] == "success":
+        print("✓ Vehicle data generated and uploaded successfully")
+        print(f"  URL: {result['url']}")
+        print(f"  Total vehicles: {result['total']}")
+        print(f"  Vehicles with sightings: {result['sighted']}")
+    else:
+        print(f"❌ Failed to generate vehicle data: {result}")
+
+    return result
+
+
 @app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume}, timeout=3600)
 def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
     """
@@ -782,6 +809,7 @@ def main(
         modal run modal_app.py --command=sync-images
         modal run modal_app.py --command=update-tlc
         modal run modal_app.py --command=backfill-hashes --dry-run=true
+        modal run modal_app.py --command=generate-web-data
     """
     import os
     from pathlib import Path
@@ -838,8 +866,12 @@ def main(
         print("🔄 Backfilling images to R2...")
         result = backfill_r2_images.remote(batch_size=10, dry_run=dry_run)
         print(f"\n✓ Backfill result: {result}")
+    elif command == "generate-web-data":
+        print("🔄 Generating web data...")
+        result = generate_web_data.remote()
+        print(f"\n✓ Result: {result}")
     else:
         print(f"Unknown command: {command}")
         print(
-            "Available commands: test, stats, post, upload, sync-images, update-tlc, backfill-hashes, backfill-r2"
+            "Available commands: test, stats, post, upload, sync-images, update-tlc, backfill-hashes, backfill-r2, generate-web-data"
         )

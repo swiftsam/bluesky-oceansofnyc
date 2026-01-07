@@ -50,6 +50,29 @@ def create_twiml_response(message: str) -> str:
 </Response>"""
 
 
+def trigger_web_data_generation():
+    """
+    Trigger background generation of vehicles.json and upload to R2.
+
+    This is called asynchronously after a sighting is successfully added
+    to keep the webhook response fast.
+    """
+    try:
+        # Import here to avoid circular dependencies and Modal issues
+        from web.generate_data import generate_vehicle_data
+
+        print("🔄 Triggering web data generation in background...")
+        # Run synchronously but don't block the webhook response
+        result = generate_vehicle_data(upload_to_r2=True)
+        if result["status"] == "success":
+            print(f"✓ Web data updated: {result['sighted']}/{result['total']} vehicles")
+        else:
+            print(f"⚠️ Web data generation failed: {result}")
+    except Exception as e:
+        # Don't fail the webhook if data generation fails
+        print(f"⚠️ Failed to trigger web data generation: {e}")
+
+
 def handle_incoming_sms(
     from_number: str,
     body: str,
@@ -281,6 +304,9 @@ def handle_incoming_sms(
                     f"⚠️ Similar image detected (distance: {dup_info['distance']}), but allowing submission"
                 )
 
+            # Trigger web data generation in background
+            trigger_web_data_generation()
+
             # Send notification for successful submission (non-admin contributors only)
             if contributor_id != 1:
                 from notify import send_admin_notification
@@ -381,6 +407,9 @@ def handle_incoming_sms(
                     print(
                         f"⚠️ Similar image detected (distance: {dup_info['distance']}), but allowing submission"
                     )
+
+                # Trigger web data generation in background
+                trigger_web_data_generation()
 
                 # Send notification for successful submission (non-admin contributors only)
                 if contributor_id != 1:
