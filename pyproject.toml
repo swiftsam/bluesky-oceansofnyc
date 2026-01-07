@@ -15,6 +15,7 @@ dependencies = [
     "modal>=1.2.4",
     "twilio>=9.0.0",
     "imagehash>=4.3.2",
+    "boto3>=1.42.23",
 ]
 
 [project.optional-dependencies]

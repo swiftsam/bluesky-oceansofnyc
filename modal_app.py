@@ -23,6 +23,7 @@ image = (
         "fastapi>=0.115.0",
         "twilio>=9.0.0",
         "imagehash>=4.3.1",
+        "boto3>=1.42.23",
     )
     .add_local_python_source("database")
     .add_local_python_source("validate")
@@ -38,10 +39,12 @@ image = (
 # modal secret create bluesky-credentials BLUESKY_HANDLE=<handle> BLUESKY_PASSWORD=<password>
 # modal secret create neon-db DATABASE_URL=<connection-string>
 # modal secret create twilio-credentials TWILIO_ACCOUNT_SID=<sid> TWILIO_AUTH_TOKEN=<token> TWILIO_PHONE_NUMBER=<number>
+# modal secret create cloudflare-r2 CLOUDFLARE_ACCOUNT_ID=<id> R2_ACCESS_KEY_ID=<key> R2_SECRET_ACCESS_KEY=<secret> R2_BUCKET_NAME=<bucket> R2_PUBLIC_URL_BASE=<url>
 secrets = [
     modal.Secret.from_name("bluesky-credentials"),
     modal.Secret.from_name("neon-db"),
     modal.Secret.from_name("twilio-credentials"),
+    modal.Secret.from_name("cloudflare-r2"),
 ]
 
 # Create a persistent volume for images and maps

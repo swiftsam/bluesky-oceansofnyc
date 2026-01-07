@@ -64,6 +64,8 @@ class ChatSession:
         self,
         state: str | None = None,
         pending_image_path: str | None = None,
+        pending_image_path_original: str | None = None,
+        pending_image_url_web: str | None = None,
         pending_plate: str | None = None,
         pending_latitude: float | None = None,
         pending_longitude: float | None = None,
@@ -84,6 +86,12 @@ class ChatSession:
         if pending_image_path is not None:
             updates.append("pending_image_path = %s")
             params.append(pending_image_path)
+        if pending_image_path_original is not None:
+            updates.append("pending_image_path_original = %s")
+            params.append(pending_image_path_original)
+        if pending_image_url_web is not None:
+            updates.append("pending_image_url_web = %s")
+            params.append(pending_image_url_web)
         if pending_plate is not None:
             updates.append("pending_plate = %s")
             params.append(pending_plate)
@@ -138,6 +146,8 @@ class ChatSession:
         self.update(
             state=self.IDLE,
             pending_image_path=None,
+            pending_image_path_original=None,
+            pending_image_url_web=None,
             pending_plate=None,
             pending_latitude=None,
             pending_longitude=None,

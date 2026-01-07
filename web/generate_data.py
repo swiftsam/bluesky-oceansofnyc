@@ -23,16 +23,17 @@ def generate_vehicle_data():
     cursor = conn.cursor()
 
     # Get all TLC vehicles with their most recent sighting
+    # Prefer web URL from R2, fall back to Modal volume path
     cursor.execute("""
         SELECT
             t.dmv_license_plate_number,
             t.vehicle_vin_number,
-            s.image_path,
+            COALESCE(s.image_url_web, s.image_path) as image,
             s.borough,
             s.timestamp
         FROM tlc_vehicles t
         LEFT JOIN LATERAL (
-            SELECT image_path, borough, timestamp
+            SELECT image_url_web, image_path, borough, timestamp
             FROM sightings
             WHERE license_plate = t.dmv_license_plate_number
             ORDER BY timestamp DESC

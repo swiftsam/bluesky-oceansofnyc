@@ -157,6 +157,8 @@ class SightingsDatabase:
         image_hash_sha256: str | None = None,
         image_hash_perceptual: str | None = None,
         borough: str | None = None,
+        image_path_original: str | None = None,
+        image_url_web: str | None = None,
     ):
         """
         Add a new sighting to the database.
@@ -166,11 +168,13 @@ class SightingsDatabase:
             timestamp: ISO timestamp of sighting
             latitude: GPS latitude (or None)
             longitude: GPS longitude (or None)
-            image_path: Path to image file
+            image_path: Path to image file (Modal volume, used for Bluesky posting)
             contributor_id: ID of contributor (required)
             image_hash_sha256: SHA-256 hash of image (optional, calculated if not provided)
             image_hash_perceptual: Perceptual hash of image (optional, calculated if not provided)
             borough: NYC borough name (Manhattan, Brooklyn, Queens, Bronx, Staten Island) or None
+            image_path_original: Path to original full-resolution image in Modal volume
+            image_url_web: Public URL to web-optimized image in R2 storage
 
         Returns:
             dict with keys:
@@ -228,8 +232,8 @@ class SightingsDatabase:
         try:
             cursor.execute(
                 """
-                INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id, image_hash_sha256, image_hash_perceptual, borough)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id, image_hash_sha256, image_hash_perceptual, borough, image_path_original, image_url_web)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """,
                 (
@@ -243,6 +247,8 @@ class SightingsDatabase:
                     image_hash_sha256,
                     image_hash_perceptual,
                     borough,
+                    image_path_original,
+                    image_url_web,
                 ),
             )
 

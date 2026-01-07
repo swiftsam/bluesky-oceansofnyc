@@ -136,19 +136,27 @@ def handle_incoming_sms(
                 if not image_data:
                     return create_twiml_response(messages.error_general())
 
-                # Save image to volume
-                images_path = f"{volume_path}/images"
-                os.makedirs(images_path, exist_ok=True)
+                # Process and save image (original + web version)
+                from utils.image_processor import ImageProcessor
 
+                processor = ImageProcessor(volume_path=volume_path)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 phone_suffix = from_number[-4:]
                 filename = f"sighting_{timestamp}_{phone_suffix}.jpg"
-                image_path = f"{images_path}/{filename}"
 
-                with open(image_path, "wb") as f:
-                    f.write(image_data)
+                # Process image: save original, create web version, upload to R2
+                image_paths = processor.process_sighting_image(
+                    image_data, filename, upload_to_r2=True
+                )
 
-                print(f"💾 Saved image to {image_path}")
+                # Use original path for hash calculation
+                image_path = image_paths["original_path"]
+                image_path_original = image_paths["original_path"]
+                image_url_web = image_paths.get("web_url")
+
+                print(f"💾 Saved original: {image_path}")
+                if image_url_web:
+                    print(f"🌐 Web URL: {image_url_web}")
 
                 # Extract GPS coordinates and timestamp
                 try:
@@ -195,6 +203,8 @@ def handle_incoming_sms(
                     session.update(
                         state=ChatSession.AWAITING_PLATE,
                         pending_image_path=image_path,
+                        pending_image_path_original=image_path_original,
+                        pending_image_url_web=image_url_web,
                         pending_latitude=lat,
                         pending_longitude=lon,
                         pending_timestamp=sighting_time,
@@ -249,6 +259,8 @@ def handle_incoming_sms(
                 image_path=session_data["pending_image_path"],
                 contributor_id=contributor_id,
                 borough=borough,
+                image_path_original=session_data.get("pending_image_path_original"),
+                image_url_web=session_data.get("pending_image_url_web"),
             )
 
             if result is None:
@@ -348,6 +360,8 @@ def handle_incoming_sms(
                     longitude=session_data["pending_longitude"],
                     image_path=session_data["pending_image_path"],
                     contributor_id=contributor_id,
+                    image_path_original=session_data.get("pending_image_path_original"),
+                    image_url_web=session_data.get("pending_image_url_web"),
                 )
 
                 if result is None:
