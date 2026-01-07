@@ -10,12 +10,9 @@ def welcome_with_image(contributor_name: str = None):
 
 def request_borough():
     """Prompt user for borough when GPS data is missing."""
-    return "Which NYC borough? Reply with: B (Brooklyn), M (Manhattan), Q (Queens), X (Bronx), or S (Staten Island)"
-
-
-def request_borough_after_plate():
-    """Prompt for borough after plate validation (no GPS in image)."""
-    return "Great! Which NYC borough? Reply with: B, M, Q, X, or S"
+    return (
+        "Which NYC borough? Reply with: B(rooklyn), M(anhattan), Q(ueens), (Bron)X, or S(taten Is)"
+    )
 
 
 def request_plate():

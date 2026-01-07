@@ -347,7 +347,7 @@ def handle_incoming_sms(
                         state=ChatSession.AWAITING_BOROUGH,
                         pending_plate=plate,
                     )
-                    return create_twiml_response(messages.request_borough_after_plate())
+                    return create_twiml_response(messages.request_borough())
 
                 # GPS exists - save sighting immediately
                 # Get or create contributor
