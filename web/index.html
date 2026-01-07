@@ -46,16 +46,7 @@
             display: block;
         }
 
-        .tile.placeholder {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
-        }
-
-        .tile.placeholder svg {
-            width: 60%;
-            height: 60%;
+        .tile.placeholder img {
             opacity: 0.3;
         }
 
@@ -119,11 +110,6 @@
             color: white;
             font-size: 18px;
         }
-
-        /* Car silhouette SVG styling */
-        .car-silhouette {
-            fill: #4a4a4a;
-        }
     </style>
 </head>
 <body>
@@ -139,13 +125,6 @@
     <div class="grid" id="grid"></div>
 
     <script>
-        // Car silhouette SVG
-        const carSVG = `
-            <svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
-                <path class="car-silhouette" d="M20,40 L25,30 L35,25 L65,25 L75,30 L80,40 L85,40 Q90,40 90,35 L90,30 Q90,25 85,25 L80,25 L75,20 Q70,15 60,15 L40,15 Q30,15 25,20 L20,25 L15,25 Q10,25 10,30 L10,35 Q10,40 15,40 Z M25,40 Q25,35 30,35 Q35,35 35,40 Q35,45 30,45 Q25,45 25,40 Z M65,40 Q65,35 70,35 Q75,35 75,40 Q75,45 70,45 Q65,45 65,40 Z"/>
-            </svg>
-        `;
-
         // Load and render vehicle data
         fetch('vehicles.json')
             .then(response => response.json())
@@ -165,18 +144,19 @@
                     const tile = document.createElement('div');
                     tile.className = 'tile';
 
+                    const img = document.createElement('img');
+                    img.loading = 'lazy';
+                    img.alt = `Vehicle ${vehicle.plate}`;
+
                     if (vehicle.image) {
                         // Has a sighting - show the image
-                        const img = document.createElement('img');
                         img.src = vehicle.image;
-                        img.alt = `Vehicle ${vehicle.plate}`;
-                        img.loading = 'lazy';
-                        tile.appendChild(img);
                     } else {
                         // No sighting - show placeholder
                         tile.classList.add('placeholder');
-                        tile.innerHTML = carSVG;
+                        img.src = 'fisker_ocean_placeholder.png';
                     }
+                    tile.appendChild(img);
 
                     // Add info overlay
                     const info = document.createElement('div');
