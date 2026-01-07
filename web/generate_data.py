@@ -77,7 +77,7 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
             sightings_by_plate[plate] = []
         sightings_by_plate[plate].append(
             {
-                "timestamp": timestamp.isoformat() if timestamp else None,
+                "timestamp": timestamp,
                 "borough": borough,
                 "contributor": preferred_name,
             }
@@ -92,7 +92,7 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
             "vin": vin,
             "image": image_path,
             "borough": borough,
-            "timestamp": timestamp.isoformat() if timestamp else None,
+            "timestamp": timestamp,
         }
 
         # Add sightings array if vehicle has any sightings
