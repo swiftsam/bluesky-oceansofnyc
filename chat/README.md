@@ -68,7 +68,6 @@ Bot: "Great! Future posts will credit you as '@myhandle.bsky.social'.
 ## Session States
 
 - `IDLE` - Waiting for initial photo
-- `AWAITING_LOCATION` - Photo received, no GPS data, asking for location
+- `AWAITING_BOROUGH` - Photo received, no GPS data, asking for NYC borough
 - `AWAITING_PLATE` - Photo received, asking for license plate
-- `AWAITING_CONFIRMATION` - Plate validated, asking for confirmation
-- `AWAITING_NAME` - Sighting saved, asking for contributor name
+- `AWAITING_NAME` - Sighting saved, asking for contributor name (optional)

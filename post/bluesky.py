@@ -143,47 +143,6 @@ class BlueskyClient:
         response = self.client.send_post(text=text, embed=embed)
         return response
 
-    def format_sighting_text(
-        self,
-        license_plate: str,
-        sighting_count: int,
-        timestamp: str,
-        latitude: float | None,
-        longitude: float | None,
-        unique_sighted: int,
-        total_fiskers: int,
-        contributed_by: str | None = None,
-    ) -> str:
-        """
-        DEPRECATED: Use create_batch_sighting_post() instead with a single sighting.
-
-        Format the text for a sighting post preview.
-        """
-        raise DeprecationWarning(
-            "format_sighting_text is deprecated. Use create_batch_sighting_post() with a single sighting instead."
-        )
-
-    def create_sighting_post(
-        self,
-        license_plate: str,
-        sighting_count: int,
-        timestamp: str,
-        latitude: float | None,
-        longitude: float | None,
-        images: list[str],
-        unique_sighted: int,
-        total_fiskers: int,
-        contributed_by: str | None = None,
-    ) -> dict:
-        """
-        DEPRECATED: Use create_batch_sighting_post() instead with a single sighting.
-
-        This method has been replaced by the unified batch posting format.
-        """
-        raise DeprecationWarning(
-            "create_sighting_post is deprecated. Use create_batch_sighting_post() with a single sighting instead."
-        )
-
     @staticmethod
     def _get_ordinal(n: int) -> str:
         """Convert number to ordinal string (1st, 2nd, 3rd, etc.)"""

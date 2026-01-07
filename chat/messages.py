@@ -8,16 +8,14 @@ def welcome_with_image(contributor_name: str = None):
     return "Great photo! What's the license plate number?"
 
 
-def request_location():
-    """Prompt user for location when missing."""
-    return "Where did you see this vehicle? (Send a street address or neighborhood in NYC)"
+def request_borough():
+    """Prompt user for borough when GPS data is missing."""
+    return "Which NYC borough? Reply with: B (Brooklyn), M (Manhattan), Q (Queens), X (Bronx), or S (Staten Island)"
 
 
-def request_location_after_plate():
-    """Prompt for location after plate validation (no GPS in image)."""
-    return (
-        "Great! Now where did you see this vehicle? (Send a street address or neighborhood in NYC)"
-    )
+def request_borough_after_plate():
+    """Prompt for borough after plate validation (no GPS in image)."""
+    return "Great! Which NYC borough? Reply with: B, M, Q, X, or S"
 
 
 def request_plate():
@@ -69,6 +67,11 @@ def sighting_cancelled():
 def invalid_response():
     """Message for unexpected input."""
     return "Sorry, I didn't understand. Reply YES to confirm or CANCEL to abort."
+
+
+def invalid_borough():
+    """Message for invalid borough input."""
+    return "Invalid borough. Please reply with: B (Brooklyn), M (Manhattan), Q (Queens), X (Bronx), or S (Staten Island)"
 
 
 def error_no_gps():

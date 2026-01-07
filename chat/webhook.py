@@ -217,27 +217,24 @@ def handle_incoming_sms(
             else:
                 return create_twiml_response(messages.help_message())
 
-        # State: AWAITING_LOCATION - expecting location text (plate already validated)
-        elif state == ChatSession.AWAITING_LOCATION:
+        # State: AWAITING_BOROUGH - expecting borough designation (plate already validated)
+        elif state == ChatSession.AWAITING_BOROUGH:
             if not body:
-                return create_twiml_response(messages.request_location())
+                return create_twiml_response(messages.request_borough())
 
-            location_text = body.strip()
-            print(f"📍 User provided location: {location_text}")
+            borough_input = body.strip()
+            print(f"📍 User provided borough input: {borough_input}")
 
-            # Try to geocode the location
-            from geolocate.geocoding import geocode_address
+            # Parse borough from user input
+            from geolocate.boroughs import parse_borough_input
 
-            coords = geocode_address(location_text)
+            borough = parse_borough_input(borough_input)
 
-            if coords is None:
-                # Geocoding failed, ask again
-                return create_twiml_response(
-                    "Sorry, I couldn't find that location. Please try a street address or neighborhood in NYC (e.g., 'Astoria' or '123 Main St, Brooklyn')"
-                )
+            if borough is None:
+                # Invalid borough input, ask again
+                return create_twiml_response(messages.invalid_borough())
 
-            lat, lon = coords
-            print(f"📍 Geocoded to: {lat}, {lon}")
+            print(f"📍 Parsed borough: {borough}")
 
             # We have everything now - save the sighting
             db = SightingsDatabase()
@@ -247,10 +244,11 @@ def handle_incoming_sms(
             result = db.add_sighting(
                 license_plate=plate,
                 timestamp=session_data["pending_timestamp"],
-                latitude=lat,
-                longitude=lon,
+                latitude=None,  # No GPS data
+                longitude=None,  # No GPS data
                 image_path=session_data["pending_image_path"],
                 contributor_id=contributor_id,
+                borough=borough,
             )
 
             if result is None:
@@ -331,13 +329,13 @@ def handle_incoming_sms(
                 )
 
                 if not has_gps:
-                    # No GPS - save plate and ask for location
-                    print(f"✓ Plate {plate} validated, asking for location")
+                    # No GPS - save plate and ask for borough
+                    print(f"✓ Plate {plate} validated, asking for borough")
                     session.update(
-                        state=ChatSession.AWAITING_LOCATION,
+                        state=ChatSession.AWAITING_BOROUGH,
                         pending_plate=plate,
                     )
-                    return create_twiml_response(messages.request_location_after_plate())
+                    return create_twiml_response(messages.request_borough_after_plate())
 
                 # GPS exists - save sighting immediately
                 # Get or create contributor

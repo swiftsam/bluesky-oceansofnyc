@@ -156,6 +156,7 @@ class SightingsDatabase:
         contributor_id: int,
         image_hash_sha256: str | None = None,
         image_hash_perceptual: str | None = None,
+        borough: str | None = None,
     ):
         """
         Add a new sighting to the database.
@@ -169,6 +170,7 @@ class SightingsDatabase:
             contributor_id: ID of contributor (required)
             image_hash_sha256: SHA-256 hash of image (optional, calculated if not provided)
             image_hash_perceptual: Perceptual hash of image (optional, calculated if not provided)
+            borough: NYC borough name (Manhattan, Brooklyn, Queens, Bronx, Staten Island) or None
 
         Returns:
             dict with keys:
@@ -217,11 +219,17 @@ class SightingsDatabase:
 
         created_at = datetime.now().isoformat()
 
+        # Auto-populate borough from coordinates if available
+        if borough is None and latitude is not None and longitude is not None:
+            from geolocate.boroughs import get_borough_from_coords
+
+            borough = get_borough_from_coords(latitude, longitude)
+
         try:
             cursor.execute(
                 """
-                INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id, image_hash_sha256, image_hash_perceptual)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id, image_hash_sha256, image_hash_perceptual, borough)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """,
                 (
@@ -234,6 +242,7 @@ class SightingsDatabase:
                     contributor_id,
                     image_hash_sha256,
                     image_hash_perceptual,
+                    borough,
                 ),
             )
 

@@ -11,7 +11,7 @@ class ChatSession:
 
     # Session states
     IDLE = "idle"
-    AWAITING_LOCATION = "awaiting_location"
+    AWAITING_BOROUGH = "awaiting_borough"
     AWAITING_PLATE = "awaiting_plate"
     AWAITING_NAME = "awaiting_name"
 
@@ -68,6 +68,7 @@ class ChatSession:
         pending_latitude: float | None = None,
         pending_longitude: float | None = None,
         pending_timestamp: datetime | None = None,
+        pending_borough: str | None = None,
     ):
         """Update session state.
 
@@ -86,6 +87,9 @@ class ChatSession:
         if pending_plate is not None:
             updates.append("pending_plate = %s")
             params.append(pending_plate)
+        if pending_borough is not None:
+            updates.append("pending_borough = %s")
+            params.append(pending_borough)
 
         # Special handling: when transitioning to AWAITING_PLATE or IDLE, always update lat/lon
         # This ensures stale coordinates from previous sessions are cleared
@@ -138,4 +142,5 @@ class ChatSession:
             pending_latitude=None,
             pending_longitude=None,
             pending_timestamp=None,
+            pending_borough=None,
         )
