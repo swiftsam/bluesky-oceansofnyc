@@ -1,0 +1,12 @@
+# Generated data files
+vehicles.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Local development
+.DS_Store

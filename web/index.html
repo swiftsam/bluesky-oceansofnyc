@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oceans of NYC - Vehicle Sightings</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #000;
+            overflow-x: hidden;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0;
+            width: 100vw;
+            min-height: 100vh;
+        }
+
+        .tile {
+            aspect-ratio: 1;
+            position: relative;
+            overflow: hidden;
+            background: #2a2a2a;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .tile:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        .tile img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .tile.placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+        }
+
+        .tile.placeholder svg {
+            width: 60%;
+            height: 60%;
+            opacity: 0.3;
+        }
+
+        .tile-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+            color: white;
+            padding: 20px 10px 10px;
+            font-size: 11px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .tile:hover .tile-info {
+            opacity: 1;
+        }
+
+        .plate {
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+        }
+
+        .borough {
+            font-size: 10px;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        .stats {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .stats h1 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .stats-line {
+            margin: 4px 0;
+            font-size: 13px;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+        }
+
+        /* Car silhouette SVG styling */
+        .car-silhouette {
+            fill: #4a4a4a;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">Loading vehicle data...</div>
+
+    <div class="stats" id="stats" style="display: none;">
+        <h1>Oceans of NYC</h1>
+        <div class="stats-line">Total Vehicles: <strong id="total">0</strong></div>
+        <div class="stats-line">Sighted: <strong id="sighted">0</strong></div>
+        <div class="stats-line">Progress: <strong id="progress">0%</strong></div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <script>
+        // Car silhouette SVG
+        const carSVG = `
+            <svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+                <path class="car-silhouette" d="M20,40 L25,30 L35,25 L65,25 L75,30 L80,40 L85,40 Q90,40 90,35 L90,30 Q90,25 85,25 L80,25 L75,20 Q70,15 60,15 L40,15 Q30,15 25,20 L20,25 L15,25 Q10,25 10,30 L10,35 Q10,40 15,40 Z M25,40 Q25,35 30,35 Q35,35 35,40 Q35,45 30,45 Q25,45 25,40 Z M65,40 Q65,35 70,35 Q75,35 75,40 Q75,45 70,45 Q65,45 65,40 Z"/>
+            </svg>
+        `;
+
+        // Load and render vehicle data
+        fetch('vehicles.json')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('stats').style.display = 'block';
+
+                // Update stats
+                document.getElementById('total').textContent = data.total.toLocaleString();
+                document.getElementById('sighted').textContent = data.sighted.toLocaleString();
+                const progress = ((data.sighted / data.total) * 100).toFixed(1);
+                document.getElementById('progress').textContent = progress + '%';
+
+                // Render tiles
+                const grid = document.getElementById('grid');
+                data.vehicles.forEach(vehicle => {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile';
+
+                    if (vehicle.image) {
+                        // Has a sighting - show the image
+                        const img = document.createElement('img');
+                        img.src = vehicle.image;
+                        img.alt = `Vehicle ${vehicle.plate}`;
+                        img.loading = 'lazy';
+                        tile.appendChild(img);
+                    } else {
+                        // No sighting - show placeholder
+                        tile.classList.add('placeholder');
+                        tile.innerHTML = carSVG;
+                    }
+
+                    // Add info overlay
+                    const info = document.createElement('div');
+                    info.className = 'tile-info';
+                    info.innerHTML = `
+                        <div class="plate">${vehicle.plate}</div>
+                        ${vehicle.borough ? `<div class="borough">${vehicle.borough}</div>` : ''}
+                    `;
+                    tile.appendChild(info);
+
+                    grid.appendChild(tile);
+                });
+            })
+            .catch(error => {
+                document.getElementById('loading').textContent = 'Error loading data: ' + error.message;
+            });
+    </script>
+</body>
+</html>
