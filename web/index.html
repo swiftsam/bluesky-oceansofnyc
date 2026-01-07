@@ -360,8 +360,18 @@
 
                 vehicle.sightings.forEach(sighting => {
                     const date = new Date(sighting.timestamp);
-                    const formattedDate = date.toLocaleDateString();
-                    const formattedTime = date.toLocaleTimeString();
+                    const formattedDate = date.toLocaleDateString('en-US', {
+                        timeZone: 'America/New_York',
+                        month: 'numeric',
+                        day: 'numeric',
+                        year: 'numeric'
+                    });
+                    const formattedTime = date.toLocaleTimeString('en-US', {
+                        timeZone: 'America/New_York',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                    });
 
                     infoHTML += `
                         <tr>
