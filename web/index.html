@@ -249,6 +249,46 @@
             object-fit: contain;
             opacity: 0.3;
         }
+
+        .sightings-section {
+            margin-top: 20px;
+        }
+
+        .sightings-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .sightings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .sightings-table th {
+            background: #f5f5f5;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .sightings-table td {
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #333;
+        }
+
+        .sightings-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .sightings-table tr:hover {
+            background: #f9f9f9;
+        }
     </style>
 </head>
 <body>
@@ -301,35 +341,47 @@
                 `;
             }
 
-            // Build info rows
+            // Build sightings table if vehicle has sightings
             let infoHTML = '';
-            if (vehicle.borough) {
+            if (vehicle.sightings && vehicle.sightings.length > 0) {
                 infoHTML += `
-                    <div class="modal-info-row">
-                        <div class="modal-info-label">Borough:</div>
-                        <div class="modal-info-value">${vehicle.borough}</div>
+                    <div class="sightings-section">
+                        <div class="sightings-title">Sightings (${vehicle.sightings.length})</div>
+                        <table class="sightings-table">
+                            <thead>
+                                <tr>
+                                    <th>Date & Time</th>
+                                    <th>Borough</th>
+                                    <th>Contributor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                vehicle.sightings.forEach(sighting => {
+                    const date = new Date(sighting.timestamp);
+                    const formattedDate = date.toLocaleDateString();
+                    const formattedTime = date.toLocaleTimeString();
+
+                    infoHTML += `
+                        <tr>
+                            <td>${formattedDate} ${formattedTime}</td>
+                            <td>${sighting.borough || '—'}</td>
+                            <td>${sighting.contributor || '—'}</td>
+                        </tr>
+                    `;
+                });
+
+                infoHTML += `
+                            </tbody>
+                        </table>
                     </div>
                 `;
-            }
-            if (vehicle.sighted_at) {
-                const date = new Date(vehicle.sighted_at);
-                infoHTML += `
-                    <div class="modal-info-row">
-                        <div class="modal-info-label">Sighted:</div>
-                        <div class="modal-info-value">${date.toLocaleDateString()} ${date.toLocaleTimeString()}</div>
-                    </div>
-                `;
-            }
-            if (vehicle.sighted_by) {
-                infoHTML += `
-                    <div class="modal-info-row">
-                        <div class="modal-info-label">Sighted by:</div>
-                        <div class="modal-info-value">${vehicle.sighted_by}</div>
-                    </div>
-                `;
+            } else {
+                infoHTML = '<div style="color: #999;">No sightings yet</div>';
             }
 
-            modalInfo.innerHTML = infoHTML || '<div style="color: #999;">No additional information available</div>';
+            modalInfo.innerHTML = infoHTML;
 
             // Show modal
             modal.classList.add('active');

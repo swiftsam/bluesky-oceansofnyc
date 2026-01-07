@@ -32,17 +32,16 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
     cursor = conn.cursor()
 
     # Get all TLC vehicles with their most recent sighting
-    # Prefer web URL from R2, fall back to Modal volume path
     cursor.execute("""
         SELECT
             t.dmv_license_plate_number,
             t.vehicle_vin_number,
-            COALESCE(s.image_url_web, s.image_path) as image,
+            s.image_url_web as image,
             s.borough,
             s.timestamp
         FROM tlc_vehicles t
         LEFT JOIN LATERAL (
-            SELECT image_url_web, image_path, borough, timestamp
+            SELECT image_url_web, borough, timestamp
             FROM sightings
             WHERE license_plate = t.dmv_license_plate_number
             ORDER BY timestamp DESC
@@ -52,18 +51,55 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
             t.dmv_license_plate_number
     """)
 
-    vehicles = []
+    # Store the main vehicle data
+    vehicle_rows = cursor.fetchall()
+
+    # Get all sightings for vehicles that have them
+    cursor.execute("""
+        SELECT
+            s.license_plate,
+            s.timestamp,
+            s.borough,
+            c.preferred_name
+        FROM sightings s
+        JOIN contributors c ON s.contributor_id = c.id
+        WHERE s.license_plate IN (
+            SELECT dmv_license_plate_number FROM tlc_vehicles
+        )
+        ORDER BY s.license_plate, s.timestamp DESC
+    """)
+
+    # Build a dict of sightings by license plate
+    sightings_by_plate: dict[str, list[dict[str, str | None]]] = {}
     for row in cursor.fetchall():
-        plate, vin, image_path, borough, timestamp = row
-        vehicles.append(
+        plate, timestamp, borough, preferred_name = row
+        if plate not in sightings_by_plate:
+            sightings_by_plate[plate] = []
+        sightings_by_plate[plate].append(
             {
-                "plate": plate,
-                "vin": vin,
-                "image": image_path,
+                "timestamp": timestamp.isoformat() if timestamp else None,
                 "borough": borough,
-                "timestamp": timestamp if timestamp else None,
+                "contributor": preferred_name,
             }
         )
+
+    # Build vehicles array
+    vehicles = []
+    for row in vehicle_rows:
+        plate, vin, image_path, borough, timestamp = row
+        vehicle_data = {
+            "plate": plate,
+            "vin": vin,
+            "image": image_path,
+            "borough": borough,
+            "timestamp": timestamp.isoformat() if timestamp else None,
+        }
+
+        # Add sightings array if vehicle has any sightings
+        if plate in sightings_by_plate:
+            vehicle_data["sightings"] = sightings_by_plate[plate]
+
+        vehicles.append(vehicle_data)
 
     conn.close()
 
