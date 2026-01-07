@@ -46,7 +46,16 @@
             display: block;
         }
 
+        .tile.placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         .tile.placeholder img {
+            width: 80%;
+            height: 80%;
+            object-fit: contain;
             opacity: 0.3;
         }
 
@@ -154,7 +163,7 @@
                     } else {
                         // No sighting - show placeholder
                         tile.classList.add('placeholder');
-                        img.src = 'fisker_ocean_placeholder.png';
+                        img.src = 'fisker_ocean_placeholder.svg';
                     }
                     tile.appendChild(img);
 
