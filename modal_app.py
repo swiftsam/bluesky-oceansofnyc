@@ -311,6 +311,7 @@ def upload_image(filename: str, image_data: bytes):
     secrets=[
         modal.Secret.from_name("neon-db"),
         modal.Secret.from_name("twilio-credentials"),
+        modal.Secret.from_name("cloudflare-r2"),
     ],
     volumes={VOLUME_PATH: volume},
 )
