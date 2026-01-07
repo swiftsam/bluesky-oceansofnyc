@@ -107,9 +107,22 @@
             backdrop-filter: blur(10px);
         }
 
+        .stats-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .stats-logo {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+        }
+
         .stats h1 {
             font-size: 18px;
-            margin-bottom: 8px;
+            margin: 0;
         }
 
         .stats-line {
@@ -125,13 +138,127 @@
             color: white;
             font-size: 18px;
         }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            max-width: 800px;
+            max-height: 90vh;
+            width: 100%;
+            overflow: auto;
+            position: relative;
+        }
+
+        .modal-header {
+            padding: 20px 60px 20px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+
+        .modal-title {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #333;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #e0e0e0;
+        }
+
+        .modal-image {
+            width: 100%;
+            display: block;
+        }
+
+        .modal-content {
+            padding: 20px;
+        }
+
+        .modal-info {
+            display: grid;
+            gap: 12px;
+        }
+
+        .modal-info-row {
+            display: flex;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .modal-info-label {
+            font-weight: 600;
+            color: #666;
+            min-width: 100px;
+        }
+
+        .modal-info-value {
+            color: #333;
+        }
+
+        .modal-placeholder {
+            width: 100%;
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f5f5f5;
+        }
+
+        .modal-placeholder img {
+            width: 200px;
+            height: 200px;
+            object-fit: contain;
+            opacity: 0.3;
+        }
     </style>
 </head>
 <body>
     <div class="loading" id="loading">Loading vehicle data...</div>
 
     <div class="stats" id="stats" style="display: none;">
-        <h1>Oceans of NYC</h1>
+        <div class="stats-header">
+            <img src="oceans_of_nyc_logo.png" alt="Oceans of NYC Logo" class="stats-logo">
+            <h1>Oceans of NYC</h1>
+        </div>
         <div class="stats-line">Total Vehicles: <strong id="total">0</strong></div>
         <div class="stats-line">Sighted: <strong id="sighted">0</strong></div>
         <div class="stats-line">Progress: <strong id="progress">0%</strong></div>
@@ -139,7 +266,87 @@
 
     <div class="grid" id="grid"></div>
 
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle"></div>
+                <button class="modal-close" id="modalClose">×</button>
+            </div>
+            <div id="modalImageContainer"></div>
+            <div class="modal-content">
+                <div class="modal-info" id="modalInfo"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Modal functions
+        function openModal(vehicle) {
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalImageContainer = document.getElementById('modalImageContainer');
+            const modalInfo = document.getElementById('modalInfo');
+
+            // Set title
+            modalTitle.textContent = vehicle.plate;
+
+            // Set image
+            if (vehicle.image) {
+                modalImageContainer.innerHTML = `<img src="${vehicle.image}" alt="Vehicle ${vehicle.plate}" class="modal-image">`;
+            } else {
+                modalImageContainer.innerHTML = `
+                    <div class="modal-placeholder">
+                        <img src="fisker_ocean_placeholder.svg" alt="No sighting yet">
+                    </div>
+                `;
+            }
+
+            // Build info rows
+            let infoHTML = '';
+            if (vehicle.borough) {
+                infoHTML += `
+                    <div class="modal-info-row">
+                        <div class="modal-info-label">Borough:</div>
+                        <div class="modal-info-value">${vehicle.borough}</div>
+                    </div>
+                `;
+            }
+            if (vehicle.sighted_at) {
+                const date = new Date(vehicle.sighted_at);
+                infoHTML += `
+                    <div class="modal-info-row">
+                        <div class="modal-info-label">Sighted:</div>
+                        <div class="modal-info-value">${date.toLocaleDateString()} ${date.toLocaleTimeString()}</div>
+                    </div>
+                `;
+            }
+            if (vehicle.sighted_by) {
+                infoHTML += `
+                    <div class="modal-info-row">
+                        <div class="modal-info-label">Sighted by:</div>
+                        <div class="modal-info-value">${vehicle.sighted_by}</div>
+                    </div>
+                `;
+            }
+
+            modalInfo.innerHTML = infoHTML || '<div style="color: #999;">No additional information available</div>';
+
+            // Show modal
+            modal.classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        // Modal event listeners
+        document.getElementById('modalClose').addEventListener('click', closeModal);
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') {
+                closeModal();
+            }
+        });
+
         // Load and render vehicle data
         fetch("https://cdn.oceansofnyc.com/web/vehicles.json")
             .then(response => response.json())
@@ -181,6 +388,9 @@
                         ${vehicle.borough ? `<div class="borough">${vehicle.borough}</div>` : ''}
                     `;
                     tile.appendChild(info);
+
+                    // Add click handler to open modal
+                    tile.addEventListener('click', () => openModal(vehicle));
 
                     grid.appendChild(tile);
                 });
