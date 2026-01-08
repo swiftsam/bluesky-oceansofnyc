@@ -28,14 +28,17 @@
             grid-template-columns: repeat(auto-fill, 100px);
             gap: 0;
             width: 100vw;
-            min-height: 100vh;
-            padding-left: 390px;
-            box-sizing: border-box;
+        }
+
+        .grid-spacer {
+            width: 390px;
+            height: 600px;
+            pointer-events: none;
         }
 
         @media (max-width: 768px) {
-            .grid {
-                padding-left: 0;
+            .grid-spacer {
+                display: none;
             }
         }
 
@@ -615,6 +618,12 @@
 
                 // Render tiles
                 const grid = document.getElementById('grid');
+
+                // Add spacer for desktop to wrap around stats panel
+                const spacer = document.createElement('div');
+                spacer.className = 'grid-spacer';
+                grid.appendChild(spacer);
+
                 data.vehicles.forEach(vehicle => {
                     const tile = document.createElement('div');
                     tile.className = 'tile';
