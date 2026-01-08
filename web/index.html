@@ -31,8 +31,8 @@
         }
 
         .grid-spacer {
-            width: 390px;
-            height: 600px;
+            width: 100px;
+            height: 100px;
             pointer-events: none;
         }
 
@@ -619,10 +619,14 @@
                 // Render tiles
                 const grid = document.getElementById('grid');
 
-                // Add spacer for desktop to wrap around stats panel
-                const spacer = document.createElement('div');
-                spacer.className = 'grid-spacer';
-                grid.appendChild(spacer);
+                // Add spacers for desktop to wrap around stats panel
+                // Stats panel is ~390px wide (4 tiles) × ~600px tall (6 rows) = 24 spacer tiles
+                const spacerCount = 24;
+                for (let i = 0; i < spacerCount; i++) {
+                    const spacer = document.createElement('div');
+                    spacer.className = 'grid-spacer';
+                    grid.appendChild(spacer);
+                }
 
                 data.vehicles.forEach(vehicle => {
                     const tile = document.createElement('div');
