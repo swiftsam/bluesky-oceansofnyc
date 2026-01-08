@@ -24,31 +24,20 @@
         }
 
         .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, 100px);
-            gap: 0;
             width: 100vw;
-        }
-
-        .grid-spacer {
-            width: 100px;
-            height: 100px;
-            pointer-events: none;
-        }
-
-        @media (max-width: 768px) {
-            .grid-spacer {
-                display: none;
-            }
+            font-size: 0; /* Remove whitespace between inline-block elements */
         }
 
         .tile {
-            aspect-ratio: 1;
+            display: inline-block;
+            width: 100px;
+            height: 100px;
             position: relative;
             overflow: hidden;
             background: #ffffff;
             cursor: pointer;
             transition: transform 0.2s ease;
+            vertical-align: top;
         }
 
         .tile:hover {
@@ -106,17 +95,17 @@
         }
 
         .stats {
-            position: fixed;
-            top: 20px;
-            left: 20px;
+            float: left;
             background: rgba(0,0,0,0.8);
             color: white;
             padding: 15px 20px;
+            margin: 20px;
             border-radius: 8px;
             font-size: 14px;
             z-index: 100;
             backdrop-filter: blur(10px);
-            max-width: 350px;
+            width: 350px;
+            box-sizing: border-box;
         }
 
         .stats-header {
@@ -369,46 +358,46 @@
 <body>
     <div class="loading" id="loading">Loading vehicle data...</div>
 
-    <div class="stats" id="stats" style="display: none;">
-        <div class="stats-header">
-            <img src="oceans_of_nyc_logo.png" alt="Oceans of NYC Logo" class="stats-logo">
-            <h1>Oceans of NYC</h1>
-        </div>
-        <div class="stats-line">Total Vehicles: <strong id="total">0</strong></div>
-        <div class="stats-line">Sighted: <strong id="sighted">0</strong></div>
-        <div class="stats-line">Progress: <strong id="progress">0%</strong></div>
-
-        <div class="filters">
-            <div class="filters-title">Filters</div>
-
-            <div class="filter-group">
-                <label class="filter-label">Status</label>
-                <select class="filter-select" id="filterStatus">
-                    <option value="all">All</option>
-                    <option value="sighted">Sighted</option>
-                    <option value="not-sighted">Not Yet Sighted</option>
-                </select>
+    <div class="grid" id="grid">
+        <div class="stats" id="stats" style="display: none;">
+            <div class="stats-header">
+                <img src="oceans_of_nyc_logo.png" alt="Oceans of NYC Logo" class="stats-logo">
+                <h1>Oceans of NYC</h1>
             </div>
+            <div class="stats-line">Total Vehicles: <strong id="total">0</strong></div>
+            <div class="stats-line">Sighted: <strong id="sighted">0</strong></div>
+            <div class="stats-line">Progress: <strong id="progress">0%</strong></div>
 
-            <div class="filter-group">
-                <label class="filter-label">Contributor</label>
-                <select class="filter-select" id="filterContributor">
-                    <option value="all">All</option>
-                </select>
+            <div class="filters">
+                <div class="filters-title">Filters</div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Status</label>
+                    <select class="filter-select" id="filterStatus">
+                        <option value="all">All</option>
+                        <option value="sighted">Sighted</option>
+                        <option value="not-sighted">Not Yet Sighted</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Contributor</label>
+                    <select class="filter-select" id="filterContributor">
+                        <option value="all">All</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Borough</label>
+                    <select class="filter-select" id="filterBorough">
+                        <option value="all">All</option>
+                    </select>
+                </div>
+
+                <div class="filter-results" id="filterResults"></div>
             </div>
-
-            <div class="filter-group">
-                <label class="filter-label">Borough</label>
-                <select class="filter-select" id="filterBorough">
-                    <option value="all">All</option>
-                </select>
-            </div>
-
-            <div class="filter-results" id="filterResults"></div>
         </div>
     </div>
-
-    <div class="grid" id="grid"></div>
 
     <div class="modal-overlay" id="modal">
         <div class="modal">
@@ -618,15 +607,6 @@
 
                 // Render tiles
                 const grid = document.getElementById('grid');
-
-                // Add spacers for desktop to wrap around stats panel
-                // Stats panel is ~390px wide (4 tiles) × ~600px tall (6 rows) = 24 spacer tiles
-                const spacerCount = 24;
-                for (let i = 0; i < spacerCount; i++) {
-                    const spacer = document.createElement('div');
-                    spacer.className = 'grid-spacer';
-                    grid.appendChild(spacer);
-                }
 
                 data.vehicles.forEach(vehicle => {
                     const tile = document.createElement('div');
