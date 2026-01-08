@@ -25,10 +25,18 @@
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            grid-template-columns: repeat(auto-fill, 100px);
             gap: 0;
             width: 100vw;
             min-height: 100vh;
+            padding-left: 390px;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                padding-left: 0;
+            }
         }
 
         .tile {
