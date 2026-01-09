@@ -390,19 +390,26 @@ def web_submission_webhook():
             # Initialize database
             db = SightingsDatabase()
 
-            # Process image for web
+            # Process image: save original, create web version, upload to R2
             processor = ImageProcessor(volume_path=VOLUME_PATH)
-            web_bytes, _ = processor.create_web_version_from_bytes(image_bytes)
 
             # Generate filenames
             timestamp = datetime.now()
             timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
-            base_filename = f"web_sighting_{timestamp_str}_{hash(image_bytes) % 10000:04d}"
-            r2_key = f"sightings/{base_filename}.jpg"
+            base_filename = f"web_sighting_{timestamp_str}_{hash(image_bytes) % 10000:04d}.jpg"
 
-            # Upload to R2
+            # Save original image to volume
+            original_path = processor.save_original(image_bytes, base_filename)
+            print(f"💾 Saved original: {original_path}")
+
+            # Create web-optimized version
+            web_bytes, _ = processor.create_web_version_from_bytes(image_bytes)
+
+            # Upload web version to R2
+            r2_key = f"sightings/web_{base_filename}"
             r2 = R2Storage()
             web_url = r2.upload_bytes(web_bytes, r2_key, content_type="image/jpeg")
+            print(f"🌐 Web URL: {web_url}")
 
             # Get or create contributor using a generated identifier for web submissions
             # Use bluesky_handle format: "web:{name}" to distinguish web contributors
@@ -425,10 +432,10 @@ def web_submission_webhook():
                 timestamp=timestamp.isoformat(),
                 latitude=None,
                 longitude=None,
-                image_path=f"{VOLUME_PATH}/sightings/{base_filename}.jpg",
+                image_path=original_path,  # Use original path for image_path
                 contributor_id=contributor_id,
                 borough=borough,
-                image_path_original=None,
+                image_path_original=original_path,  # Store original path
                 image_url_web=web_url,
                 image_hash_sha256=sha256_hash,
                 image_hash_perceptual=perceptual_hash,
