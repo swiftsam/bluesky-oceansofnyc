@@ -72,7 +72,11 @@ class R2Storage:
             return self.upload_fileobj(f, object_key, content_type)
 
     def upload_fileobj(
-        self, fileobj: BinaryIO, object_key: str, content_type: str = "image/jpeg"
+        self,
+        fileobj: BinaryIO,
+        object_key: str,
+        content_type: str = "image/jpeg",
+        cache_control: str | None = None,
     ) -> str:
         """
         Upload a file object to R2 storage.
@@ -81,15 +85,19 @@ class R2Storage:
             fileobj: File-like object to upload
             object_key: Key/path in R2 bucket
             content_type: MIME type of the file
+            cache_control: Cache-Control header value (default: 1 year for images)
 
         Returns:
             Public URL of the uploaded file
         """
+        if cache_control is None:
+            cache_control = "public, max-age=31536000"  # 1 year default for images
+
         self.s3_client.upload_fileobj(
             fileobj,
             self.bucket_name,
             object_key,
-            ExtraArgs={"ContentType": content_type, "CacheControl": "public, max-age=31536000"},
+            ExtraArgs={"ContentType": content_type, "CacheControl": cache_control},
         )
 
         # Return public URL
@@ -97,7 +105,13 @@ class R2Storage:
             return f"{self.public_url_base}/{object_key}"
         return f"https://{self.bucket_name}.{self.account_id}.r2.dev/{object_key}"
 
-    def upload_bytes(self, data: bytes, object_key: str, content_type: str = "image/jpeg") -> str:
+    def upload_bytes(
+        self,
+        data: bytes,
+        object_key: str,
+        content_type: str = "image/jpeg",
+        cache_control: str | None = None,
+    ) -> str:
         """
         Upload bytes to R2 storage.
 
@@ -105,13 +119,14 @@ class R2Storage:
             data: Bytes to upload
             object_key: Key/path in R2 bucket
             content_type: MIME type of the data
+            cache_control: Cache-Control header value (default: 1 year for images)
 
         Returns:
             Public URL of the uploaded file
         """
         import io
 
-        return self.upload_fileobj(io.BytesIO(data), object_key, content_type)
+        return self.upload_fileobj(io.BytesIO(data), object_key, content_type, cache_control)
 
     def delete_file(self, object_key: str) -> None:
         """

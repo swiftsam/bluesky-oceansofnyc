@@ -112,12 +112,17 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
     json_content = json.dumps(data, indent=2)
 
     if upload_to_r2:
-        # Upload to R2
+        # Upload to R2 with short cache time (60 seconds)
         from utils.r2_storage import R2Storage
 
         r2 = R2Storage()
         r2_key = "web/vehicles.json"
-        url = r2.upload_bytes(json_content.encode("utf-8"), r2_key, content_type="application/json")
+        url = r2.upload_bytes(
+            json_content.encode("utf-8"),
+            r2_key,
+            content_type="application/json",
+            cache_control="public, max-age=60",  # 1 minute cache
+        )
 
         print(f"✓ Uploaded to R2: {url}")
         print(f"  Total vehicles: {len(vehicles)}")

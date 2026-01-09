@@ -554,8 +554,8 @@
             document.getElementById('filterResults').textContent = resultsText;
         }
 
-        // Load and render vehicle data (cache-bust with timestamp)
-        fetch(`https://cdn.oceansofnyc.com/web/vehicles.json?t=${Date.now()}`)
+        // Load and render vehicle data (revalidate cache with server)
+        fetch("https://cdn.oceansofnyc.com/web/vehicles.json", { cache: "no-cache" })
             .then(response => response.json())
             .then(data => {
                 document.getElementById('loading').style.display = 'none';
