@@ -387,19 +387,8 @@ def web_submission_webhook():
             # Calculate image hashes for duplicate detection
             sha256_hash, perceptual_hash = calculate_both_hashes_from_bytes(image_bytes)
 
-            # Check for duplicates
+            # Initialize database
             db = SightingsDatabase()
-            existing = db.find_duplicate_by_hash(sha256_hash, perceptual_hash)
-            if existing:
-                dup_type = existing.get("type", "exact")
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "success": False,
-                        "error": "duplicate_image",
-                        "message": f"This image appears to be a duplicate ({dup_type} match)",
-                    },
-                )
 
             # Process image for web
             processor = ImageProcessor(volume_path=VOLUME_PATH)
@@ -451,11 +440,18 @@ def web_submission_webhook():
                     content={
                         "success": False,
                         "error": "duplicate_image",
-                        "message": "This image was already submitted",
+                        "message": "This image has already been submitted (exact match)",
                     },
                 )
 
             sighting_id = result["id"]
+
+            # Log warning if similar image detected (but still accept it)
+            if result.get("duplicate_type") == "similar":
+                duplicate_info = result.get("duplicate_info", {})
+                print(
+                    f"⚠️ Similar image detected (distance: {duplicate_info.get('distance')}), but allowing web submission"
+                )
 
             # Trigger web data regeneration
             try:
