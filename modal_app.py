@@ -24,6 +24,7 @@ image = (
         "twilio>=9.0.0",
         "imagehash>=4.3.1",
         "boto3>=1.42.23",
+        "python-multipart>=0.0.6",
     )
     .add_local_python_source("database")
     .add_local_python_source("validate")
