@@ -13,10 +13,15 @@ Usage:
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
-import psycopg2
-import psycopg2.extras
-from dotenv import load_dotenv
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+import psycopg2  # noqa: E402
+import psycopg2.extras  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv()
 
