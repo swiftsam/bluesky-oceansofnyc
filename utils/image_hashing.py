@@ -121,6 +121,35 @@ def calculate_both_hashes(image_path: str) -> tuple[str, str]:
     return sha256, phash
 
 
+def calculate_both_hashes_from_bytes(image_bytes: bytes) -> tuple[str, str]:
+    """
+    Calculate both SHA-256 and perceptual hashes from image bytes.
+
+    Convenience function for getting both hashes from bytes without file I/O.
+
+    Args:
+        image_bytes: Raw image bytes
+
+    Returns:
+        Tuple of (sha256_hash, perceptual_hash)
+
+    Raises:
+        ImageHashError: If image cannot be processed
+    """
+    # Calculate SHA-256 hash from bytes
+    sha256_hash = hashlib.sha256(image_bytes).hexdigest()
+
+    # Calculate perceptual hash from bytes
+    try:
+        from io import BytesIO
+
+        with Image.open(BytesIO(image_bytes)) as img:
+            phash = imagehash.dhash(img, hash_size=8)
+            return sha256_hash, str(phash)
+    except Exception as e:
+        raise ImageHashError(f"Failed to calculate hashes from bytes: {e}")
+
+
 def find_similar_images(
     db_connection,
     perceptual_hash: str,

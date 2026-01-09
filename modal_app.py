@@ -277,6 +277,225 @@ def get_hello():
 
 @app.function(
     image=image,
+    secrets=[
+        modal.Secret.from_name("neon-db"),
+        modal.Secret.from_name("cloudflare-r2"),
+    ],
+    volumes={VOLUME_PATH: volume},
+)
+@modal.asgi_app()
+def web_submission_webhook():
+    """
+    Web submission endpoint for sighting submissions from the static website.
+
+    Configure CORS to allow requests from oceansofnyc.com.
+
+    POST /submit - Submit a new sighting
+    - Form data: image (file), license_plate (str), borough (str), contributor_name (str)
+    - Returns JSON with success/error status
+    """
+    from datetime import datetime
+
+    from fastapi import FastAPI, Form, UploadFile
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
+
+    from database import SightingsDatabase
+    from utils.image_hashing import calculate_both_hashes_from_bytes
+    from utils.image_processor import ImageProcessor
+    from utils.r2_storage import R2Storage
+    from validate import validate_plate
+    from web.generate_data import generate_vehicle_data
+
+    web_app = FastAPI()
+
+    # Add CORS middleware to allow requests from the static site
+    web_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "https://oceansofnyc.com",
+            "https://www.oceansofnyc.com",
+            "http://localhost:8000",  # For local testing
+        ],
+        allow_credentials=True,
+        allow_methods=["POST", "GET", "OPTIONS"],
+        allow_headers=["*"],
+    )
+
+    @web_app.post("/submit")
+    async def submit_sighting(
+        image: UploadFile,
+        license_plate: str = Form(...),
+        borough: str = Form(...),
+        contributor_name: str = Form(...),
+    ):
+        """Handle web submission of a new sighting."""
+        try:
+            # Validate required fields
+            if not contributor_name.strip():
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "validation_error",
+                        "message": "Name is required",
+                    },
+                )
+
+            # Normalize and validate license plate
+            plate = license_plate.strip().upper()
+            # Handle 6-digit shorthand (e.g., "123456" -> "T123456C")
+            if plate.isdigit() and len(plate) == 6:
+                plate = f"T{plate}C"
+
+            is_valid, vehicle_info = validate_plate(plate)
+            if not is_valid:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "invalid_plate",
+                        "message": f"License plate {plate} not found in TLC database",
+                    },
+                )
+
+            # Validate borough
+            valid_boroughs = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
+            if borough not in valid_boroughs:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "validation_error",
+                        "message": f"Invalid borough. Must be one of: {', '.join(valid_boroughs)}",
+                    },
+                )
+
+            # Read image data
+            image_bytes = await image.read()
+            if len(image_bytes) == 0:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "validation_error",
+                        "message": "Image file is empty",
+                    },
+                )
+
+            # Calculate image hashes for duplicate detection
+            sha256_hash, perceptual_hash = calculate_both_hashes_from_bytes(image_bytes)
+
+            # Check for duplicates
+            db = SightingsDatabase()
+            existing = db.find_duplicate_by_hash(sha256_hash, perceptual_hash)
+            if existing:
+                dup_type = existing.get("type", "exact")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "duplicate_image",
+                        "message": f"This image appears to be a duplicate ({dup_type} match)",
+                    },
+                )
+
+            # Process image for web
+            processor = ImageProcessor(volume_path=VOLUME_PATH)
+            web_bytes, _ = processor.create_web_version_from_bytes(image_bytes)
+
+            # Generate filenames
+            timestamp = datetime.now()
+            timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
+            base_filename = f"web_sighting_{timestamp_str}_{hash(image_bytes) % 10000:04d}"
+            r2_key = f"sightings/{base_filename}.jpg"
+
+            # Upload to R2
+            r2 = R2Storage()
+            web_url = r2.upload_bytes(web_bytes, r2_key, content_type="image/jpeg")
+
+            # Get or create contributor using a generated identifier for web submissions
+            # Use bluesky_handle format: "web:{name}" to distinguish web contributors
+            web_identifier = f"web:{contributor_name.strip().lower().replace(' ', '_')}"
+            contributor_id = db.get_or_create_contributor(bluesky_handle=web_identifier)
+
+            # Update the contributor's preferred name if needed
+            conn = db._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE contributors SET preferred_name = %s WHERE id = %s AND preferred_name IS NULL",
+                (contributor_name.strip(), contributor_id),
+            )
+            conn.commit()
+            conn.close()
+
+            # Create sighting record
+            result = db.add_sighting(
+                license_plate=plate,
+                timestamp=timestamp.isoformat(),
+                latitude=None,
+                longitude=None,
+                image_path=f"{VOLUME_PATH}/sightings/{base_filename}.jpg",
+                contributor_id=contributor_id,
+                borough=borough,
+                image_path_original=None,
+                image_url_web=web_url,
+                image_hash_sha256=sha256_hash,
+                image_hash_perceptual=perceptual_hash,
+            )
+
+            if result is None:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "duplicate_image",
+                        "message": "This image was already submitted",
+                    },
+                )
+
+            sighting_id = result["id"]
+
+            # Trigger web data regeneration
+            try:
+                generate_vehicle_data(upload_to_r2=True)
+            except Exception as e:
+                print(f"Warning: Failed to regenerate web data: {e}")
+
+            # Commit volume changes
+            volume.commit()
+
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": f"Sighting submitted successfully! Vehicle {plate} recorded.",
+                    "sighting_id": sighting_id,
+                }
+            )
+
+        except Exception as e:
+            print(f"Error processing web submission: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "error": "server_error",
+                    "message": "An error occurred processing your submission. Please try again.",
+                },
+            )
+
+    @web_app.get("/")
+    async def health_check():
+        return {"status": "ok", "service": "oceans-of-nyc-web-submission"}
+
+    return web_app
+
+
+@app.function(
+    image=image,
     volumes={VOLUME_PATH: volume},
 )
 def upload_image(filename: str, image_data: bytes):

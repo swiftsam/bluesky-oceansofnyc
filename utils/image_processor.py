@@ -83,6 +83,42 @@ class ImageProcessor:
 
         return image_bytes, web_filename
 
+    def create_web_version_from_bytes(
+        self, image_bytes: bytes, max_width: int = 1200, max_height: int = 1200, quality: int = 85
+    ) -> tuple[bytes, str]:
+        """
+        Create web-optimized version of image from bytes.
+
+        Args:
+            image_bytes: Raw image bytes
+            max_width: Maximum width for web version
+            max_height: Maximum height for web version
+            quality: JPEG quality (1-100)
+
+        Returns:
+            Tuple of (processed_image_bytes, generic_filename)
+        """
+        img = Image.open(io.BytesIO(image_bytes))
+
+        # Convert RGBA to RGB if necessary
+        if img.mode == "RGBA":
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[3])
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Resize if needed
+        if img.width > max_width or img.height > max_height:
+            img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+
+        # Save to bytes
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=quality, optimize=True)
+        processed_bytes = buffer.getvalue()
+
+        return processed_bytes, "web_image.jpg"
+
     def save_web_version_local(self, web_bytes: bytes, filename: str) -> str:
         """
         Save web version to local volume (for backup/caching).
