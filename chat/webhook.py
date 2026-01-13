@@ -310,7 +310,9 @@ def handle_incoming_sms(
                         contributor_sighting_num = db.get_contributor_sighting_count(contributor_id)
 
                         contributor = db.get_contributor(contributor_id=contributor_id)
+                        print(f"🔍 Contributor check: {contributor}")
                         if not contributor["preferred_name"]:
+                            print("📝 Asking for preferred name")
                             session.update(state=ChatSession.AWAITING_NAME)
                             msg = messages.sighting_confirmed(
                                 validated_plate,
@@ -321,15 +323,18 @@ def handle_incoming_sms(
                             msg += "\n\nWould you like to set a name for future posts? Reply with your name, or SKIP to remain anonymous."
                             return create_twiml_response(msg)
 
+                        print("✅ Sending confirmation message")
                         session.reset()
-                        return create_twiml_response(
-                            messages.sighting_confirmed(
-                                validated_plate,
-                                vehicle_sighting_num,
-                                total_sightings,
-                                contributor_sighting_num,
-                            )
+                        confirmation_msg = messages.sighting_confirmed(
+                            validated_plate,
+                            vehicle_sighting_num,
+                            total_sightings,
+                            contributor_sighting_num,
                         )
+                        print(f"📤 Confirmation message: {confirmation_msg}")
+                        twiml_response = create_twiml_response(confirmation_msg)
+                        print(f"📤 TwiML response length: {len(twiml_response)} bytes")
+                        return twiml_response
 
                     # Otherwise, ask for what's missing (plate takes priority)
                     if not has_plate:

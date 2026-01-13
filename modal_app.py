@@ -599,10 +599,14 @@ def chat_sms_webhook():
             channel_type=channel_type,
         )
 
+        print(f"📨 Received TwiML response from handler: {len(twiml_response)} bytes")
+        print(f"📨 TwiML preview: {twiml_response[:200]}")
+
         # Commit volume changes if any images were saved
         volume.commit()
 
         # Return TwiML response
+        print("📤 Returning TwiML response to Twilio")
         return Response(
             content=twiml_response,
             media_type="application/xml",
