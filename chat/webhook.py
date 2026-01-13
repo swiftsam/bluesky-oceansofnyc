@@ -144,7 +144,10 @@ def handle_incoming_sms(
             send_admin_notification(f"New chat session from {display_name}")
 
     try:
-        # State: IDLE - expecting photo
+        # Import extraction utilities
+        from chat.extractors import extract_borough_from_text, extract_plate_from_text
+
+        # State: IDLE - expecting photo (but can also extract plate/borough from text)
         if state == ChatSession.IDLE:
             if num_media > 0 and media_urls:
                 # Download and process first image
@@ -221,8 +224,26 @@ def handle_incoming_sms(
                     else:
                         print("⚠️ No GPS data in image - will ask for location after plate")
 
-                    # Always proceed to AWAITING_PLATE state
-                    # Store GPS if found (None if not - we'll ask for location later)
+                    # Try to extract plate and borough from the message body
+                    extracted_plate = extract_plate_from_text(body) if body else None
+                    extracted_borough = extract_borough_from_text(body) if body else None
+
+                    if extracted_plate:
+                        print(f"📝 Extracted plate from message: {extracted_plate}")
+                    if extracted_borough:
+                        print(f"📍 Extracted borough from message: {extracted_borough}")
+
+                    # Validate plate if extracted
+                    validated_plate = None
+                    if extracted_plate:
+                        is_valid, vehicle = validate_plate(extracted_plate)
+                        if is_valid and vehicle:
+                            validated_plate = extracted_plate
+                            print(f"✓ Plate {validated_plate} validated")
+                        else:
+                            print(f"⚠️ Extracted plate {extracted_plate} not valid, will ask user")
+
+                    # Update session with all available data
                     session.update(
                         state=ChatSession.AWAITING_PLATE,
                         pending_image_path=image_path,
@@ -231,14 +252,90 @@ def handle_incoming_sms(
                         pending_latitude=lat,
                         pending_longitude=lon,
                         pending_timestamp=sighting_time,
+                        pending_plate=validated_plate,
+                        pending_borough=extracted_borough,
                     )
+
+                    # Determine what we're still missing and respond accordingly
+                    has_plate = validated_plate is not None
+                    has_location = lat is not None or extracted_borough is not None
 
                     # Get contributor name for personalized greeting
                     contributor = db.get_contributor(phone_number=from_number)
                     contributor_name = contributor.get("preferred_name") if contributor else None
 
-                    # Always greet and ask for plate first
-                    return create_twiml_response(messages.welcome_with_image(contributor_name))
+                    # If we have everything, save immediately
+                    if has_plate and has_location:
+                        print("✓ All data collected, saving sighting")
+                        contributor_id = db.get_or_create_contributor(phone_number=from_number)
+
+                        result = db.add_sighting(
+                            license_plate=validated_plate,
+                            timestamp=sighting_time,
+                            latitude=lat,
+                            longitude=lon,
+                            image_path=image_path,
+                            contributor_id=contributor_id,
+                            borough=extracted_borough if not lat else None,
+                            image_path_original=image_path_original,
+                            image_url_web=image_url_web,
+                        )
+
+                        if result is None:
+                            print(f"⚠️ Duplicate image detected for plate {validated_plate}")
+                            session.reset()
+                            return create_twiml_response(
+                                "You've already submitted this exact photo. Send a new photo to log another sighting!"
+                            )
+
+                        sighting_id = result["id"]
+                        print(f"✅ Sighting saved for plate {validated_plate} (ID: {sighting_id})")
+
+                        if result["duplicate_type"] == "similar":
+                            dup_info = result["duplicate_info"]
+                            print(
+                                f"⚠️ Similar image detected (distance: {dup_info['distance']}), but allowing submission"
+                            )
+
+                        trigger_web_data_generation()
+
+                        if contributor_id != 1:
+                            from notify import send_admin_notification
+
+                            display_name = contributor.get("preferred_name") or from_number
+                            send_admin_notification(f"Successful submission from {display_name}")
+
+                        vehicle_sighting_num = db.get_sighting_count(validated_plate)
+                        total_sightings = db.get_total_sighting_count()
+                        contributor_sighting_num = db.get_contributor_sighting_count(contributor_id)
+
+                        contributor = db.get_contributor(contributor_id=contributor_id)
+                        if not contributor["preferred_name"]:
+                            session.update(state=ChatSession.AWAITING_NAME)
+                            msg = messages.sighting_confirmed(
+                                validated_plate,
+                                vehicle_sighting_num,
+                                total_sightings,
+                                contributor_sighting_num,
+                            )
+                            msg += "\n\nWould you like to set a name for future posts? Reply with your name, or SKIP to remain anonymous."
+                            return create_twiml_response(msg)
+
+                        session.reset()
+                        return create_twiml_response(
+                            messages.sighting_confirmed(
+                                validated_plate,
+                                vehicle_sighting_num,
+                                total_sightings,
+                                contributor_sighting_num,
+                            )
+                        )
+
+                    # Otherwise, ask for what's missing (plate takes priority)
+                    if not has_plate:
+                        return create_twiml_response(messages.welcome_with_image(contributor_name))
+                    # Has plate but no location
+                    return create_twiml_response(messages.request_borough())
 
                 except Exception as e:
                     print(f"❌ Error extracting metadata: {e}")
@@ -255,13 +352,8 @@ def handle_incoming_sms(
             if not body:
                 return create_twiml_response(messages.request_borough())
 
-            borough_input = body.strip()
-            print(f"📍 User provided borough input: {borough_input}")
-
-            # Parse borough from user input
-            from geolocate.boroughs import parse_borough_input
-
-            borough = parse_borough_input(borough_input)
+            # Try to extract borough from the message
+            borough = extract_borough_from_text(body)
 
             if borough is None:
                 # Invalid borough input, ask again
@@ -340,43 +432,56 @@ def handle_incoming_sms(
                 )
             )
 
-        # State: AWAITING_PLATE - expecting plate number
+        # State: AWAITING_PLATE - expecting plate number (but can also extract borough)
         elif state == ChatSession.AWAITING_PLATE:
             if not body:
                 return create_twiml_response(messages.request_plate())
 
-            plate = body.strip().upper()
+            # Try to extract plate and borough from the message
+            extracted_plate = extract_plate_from_text(body)
+            extracted_borough = extract_borough_from_text(body)
 
-            # Normalize plate format: if user sends just 6 digits, add T prefix and C suffix
-            # Valid format is T######C (e.g., T123456C)
-            if plate.isdigit() and len(plate) == 6:
-                plate = f"T{plate}C"
-                print(f"📝 Normalized plate format: {plate}")
+            if extracted_plate:
+                print(f"📝 Extracted plate from message: {extracted_plate}")
+            if extracted_borough:
+                print(f"📍 Extracted borough from message: {extracted_borough}")
 
             # Validate plate
-            is_valid, vehicle = validate_plate(plate)
+            plate = None
+            if extracted_plate:
+                is_valid, vehicle = validate_plate(extracted_plate)
+                if is_valid and vehicle:
+                    plate = extracted_plate
+                    print(f"✓ Plate {plate} validated")
 
-            if is_valid and vehicle:
-                # Plate is valid! Check if we have GPS or need to ask for location
-                db = SightingsDatabase()
-
-                # Check if GPS exists in session
-                has_gps = (
-                    session_data["pending_latitude"] is not None
-                    and session_data["pending_longitude"] is not None
+            if not plate:
+                # Try to find similar plates for typo correction
+                suggestions = get_potential_matches(
+                    extracted_plate or body.strip().upper(), max_results=5
+                )
+                return create_twiml_response(
+                    messages.plate_not_found(extracted_plate or body.strip().upper(), suggestions)
                 )
 
-                if not has_gps:
-                    # No GPS - save plate and ask for borough
-                    print(f"✓ Plate {plate} validated, asking for borough")
-                    session.update(
-                        state=ChatSession.AWAITING_BOROUGH,
-                        pending_plate=plate,
-                    )
-                    return create_twiml_response(messages.request_borough())
+            # Plate is valid! Check if we have all location data
+            db = SightingsDatabase()
 
-                # GPS exists - save sighting immediately
-                # Get or create contributor
+            # Check what location data we have
+            has_gps = (
+                session_data["pending_latitude"] is not None
+                and session_data["pending_longitude"] is not None
+            )
+
+            # Update session with validated plate and any extracted borough
+            final_borough = extracted_borough or session_data.get("pending_borough")
+            if extracted_borough:
+                session.update(pending_plate=plate, pending_borough=extracted_borough)
+            else:
+                session.update(pending_plate=plate)
+
+            # If we have location data (GPS or borough), save immediately
+            if has_gps or final_borough:
+                print("✓ All data collected, saving sighting")
                 contributor_id = db.get_or_create_contributor(phone_number=from_number)
 
                 result = db.add_sighting(
@@ -386,12 +491,12 @@ def handle_incoming_sms(
                     longitude=session_data["pending_longitude"],
                     image_path=session_data["pending_image_path"],
                     contributor_id=contributor_id,
+                    borough=final_borough if not has_gps else None,
                     image_path_original=session_data.get("pending_image_path_original"),
                     image_url_web=session_data.get("pending_image_url_web"),
                 )
 
                 if result is None:
-                    # Image already exists in database (exact duplicate)
                     print(f"⚠️ Duplicate image detected for plate {plate}")
                     session.reset()
                     return create_twiml_response(
@@ -401,17 +506,14 @@ def handle_incoming_sms(
                 sighting_id = result["id"]
                 print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
 
-                # Warn if similar image detected
                 if result["duplicate_type"] == "similar":
                     dup_info = result["duplicate_info"]
                     print(
                         f"⚠️ Similar image detected (distance: {dup_info['distance']}), but allowing submission"
                     )
 
-                # Trigger web data generation in background
                 trigger_web_data_generation()
 
-                # Send notification for successful submission (non-admin contributors only)
                 if contributor_id != 1:
                     from notify import send_admin_notification
 
@@ -419,15 +521,12 @@ def handle_incoming_sms(
                     display_name = contributor.get("preferred_name") or from_number
                     send_admin_notification(f"Successful submission from {display_name}")
 
-                # Get stats for the confirmation message
                 vehicle_sighting_num = db.get_sighting_count(plate)
                 total_sightings = db.get_total_sighting_count()
                 contributor_sighting_num = db.get_contributor_sighting_count(contributor_id)
 
-                # Check if contributor has a preferred name
                 contributor = db.get_contributor(contributor_id=contributor_id)
                 if not contributor["preferred_name"]:
-                    # Ask if they want to set a name
                     session.update(state=ChatSession.AWAITING_NAME)
                     msg = messages.sighting_confirmed(
                         plate, vehicle_sighting_num, total_sightings, contributor_sighting_num
@@ -435,18 +534,20 @@ def handle_incoming_sms(
                     msg += "\n\nWould you like to set a name for future posts? Reply with your name, or SKIP to remain anonymous."
                     return create_twiml_response(msg)
 
-                # Reset session
                 session.reset()
-
                 return create_twiml_response(
                     messages.sighting_confirmed(
                         plate, vehicle_sighting_num, total_sightings, contributor_sighting_num
                     )
                 )
 
-            # Try to find similar plates
-            suggestions = get_potential_matches(plate, max_results=5)
-            return create_twiml_response(messages.plate_not_found(plate, suggestions))
+            # No location data - ask for borough
+            print(f"✓ Plate {plate} validated, asking for borough")
+            session.update(
+                state=ChatSession.AWAITING_BOROUGH,
+                pending_plate=plate,
+            )
+            return create_twiml_response(messages.request_borough())
 
         # State: AWAITING_NAME - user can set their preferred name
         elif state == ChatSession.AWAITING_NAME:
