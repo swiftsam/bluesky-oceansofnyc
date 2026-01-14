@@ -218,6 +218,52 @@
             display: block;
         }
 
+        .modal-image-gallery {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 12px;
+            background: #f5f5f5;
+            scroll-behavior: smooth;
+        }
+
+        .modal-image-gallery::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .modal-image-gallery::-webkit-scrollbar-track {
+            background: #e0e0e0;
+            border-radius: 4px;
+        }
+
+        .modal-image-gallery::-webkit-scrollbar-thumb {
+            background: #999;
+            border-radius: 4px;
+        }
+
+        .modal-image-gallery::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+
+        .gallery-image {
+            height: 200px;
+            width: auto;
+            object-fit: cover;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            flex-shrink: 0;
+        }
+
+        .gallery-image:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .gallery-image.active {
+            border: 3px solid #333;
+        }
+
         .modal-content {
             padding: 20px;
         }
@@ -571,8 +617,35 @@
             // Set title
             modalTitle.textContent = vehicle.plate;
 
-            // Set image
-            if (vehicle.image) {
+            // Collect all images from sightings
+            const sightingImages = vehicle.sightings?.filter(s => s.image).map(s => s.image) || [];
+
+            // Set primary image and gallery
+            if (sightingImages.length > 0) {
+                let galleryHTML = `
+                    <div class="modal-image-container">
+                        <img id="modalPrimaryImage" src="${sightingImages[0]}" alt="Vehicle ${vehicle.plate}" class="modal-image">
+                    </div>
+                `;
+
+                // Add horizontal scrollable gallery if there are multiple images
+                if (sightingImages.length > 1) {
+                    galleryHTML += '<div class="modal-image-gallery">';
+                    sightingImages.forEach((img, index) => {
+                        galleryHTML += `
+                            <img src="${img}"
+                                 alt="Sighting ${index + 1}"
+                                 class="gallery-image ${index === 0 ? 'active' : ''}"
+                                 data-index="${index}"
+                                 onclick="selectModalImage('${img}', ${index})">
+                        `;
+                    });
+                    galleryHTML += '</div>';
+                }
+
+                modalImageContainer.innerHTML = galleryHTML;
+            } else if (vehicle.image) {
+                // Fallback to legacy single image if no sighting images
                 modalImageContainer.innerHTML = `
                     <div class="modal-image-container">
                         <img src="${vehicle.image}" alt="Vehicle ${vehicle.plate}" class="modal-image">
@@ -644,6 +717,23 @@
 
         function closeModal() {
             document.getElementById('modal').classList.remove('active');
+        }
+
+        function selectModalImage(imageSrc, index) {
+            // Update primary image
+            const primaryImage = document.getElementById('modalPrimaryImage');
+            if (primaryImage) {
+                primaryImage.src = imageSrc;
+            }
+
+            // Update active state on gallery thumbnails
+            document.querySelectorAll('.gallery-image').forEach((img, i) => {
+                if (i === index) {
+                    img.classList.add('active');
+                } else {
+                    img.classList.remove('active');
+                }
+            });
         }
 
         // Modal event listeners
