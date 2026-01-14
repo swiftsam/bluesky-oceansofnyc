@@ -1,6 +1,9 @@
 # Oceans of NYC - Just Commands
 # Run `just` to see all available commands
 
+# Configure uv to use only its managed Python installations
+export UV_PYTHON_PREFERENCE := "only-managed"
+
 # Default recipe lists all commands
 default:
     @just --list
