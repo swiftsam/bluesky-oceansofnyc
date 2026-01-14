@@ -60,7 +60,8 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
             s.license_plate,
             s.timestamp,
             s.borough,
-            c.preferred_name
+            c.preferred_name,
+            s.image_url_web
         FROM sightings s
         JOIN contributors c ON s.contributor_id = c.id
         WHERE s.license_plate IN (
@@ -72,7 +73,7 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
     # Build a dict of sightings by license plate
     sightings_by_plate: dict[str, list[dict[str, str | None]]] = {}
     for row in cursor.fetchall():
-        plate, timestamp, borough, preferred_name = row
+        plate, timestamp, borough, preferred_name, image_url_web = row
         if plate not in sightings_by_plate:
             sightings_by_plate[plate] = []
         sightings_by_plate[plate].append(
@@ -80,6 +81,7 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
                 "timestamp": timestamp,
                 "borough": borough,
                 "contributor": preferred_name,
+                "image": image_url_web,
             }
         )
 
