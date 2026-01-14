@@ -92,6 +92,10 @@ def hamming_distance(hash1: str, hash2: str) -> int:
     if len(hash1) != len(hash2):
         raise ValueError(f"Hash lengths must match: {len(hash1)} != {len(hash2)}")
 
+    # Handle empty hashes
+    if len(hash1) == 0:
+        return 0
+
     try:
         # Convert hex to binary and count differing bits
         bits1 = bin(int(hash1, 16))[2:].zfill(len(hash1) * 4)

@@ -45,7 +45,7 @@ class TestSimilarPlateLogic:
         plate1 = "T123456C"
         plate2 = "X987654Y"
         diff_count = sum(1 for a, b in zip(plate1, plate2, strict=False) if a != b)
-        assert diff_count == 8
+        assert diff_count == 7
 
     def test_different_length_plates_skipped(self):
         """Test that plates of different lengths should be filtered out."""
@@ -75,7 +75,7 @@ class TestSimilarPlateLogic:
             ("T123456C", "T123456C", 0, False),  # Identical - exclude (> 0)
             ("T123456C", "T123457C", 1, True),  # 1 difference - include
             ("T123456C", "T123457D", 2, True),  # 2 differences - include
-            ("T123456C", "T123567D", 3, False),  # 3 differences - exclude (> 2)
+            ("T123456C", "T123567D", 4, False),  # 4 differences - exclude (> 2)
         ]
 
         for plate1, plate2, expected_diff, should_include in test_cases:

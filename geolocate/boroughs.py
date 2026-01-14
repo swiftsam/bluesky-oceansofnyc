@@ -2,12 +2,13 @@
 
 # Approximate bounding boxes for NYC boroughs
 # Format: (min_lat, max_lat, min_lon, max_lon)
+# Note: These boxes overlap, handled by priority rules in get_borough_from_coords()
 BOROUGH_BOUNDS = {
-    "Manhattan": (40.700, 40.882, -74.019, -73.907),
-    "Brooklyn": (40.570, 40.739, -74.042, -73.833),
-    "Queens": (40.541, 40.800, -73.962, -73.700),
     "Bronx": (40.785, 40.917, -73.934, -73.749),
     "Staten Island": (40.477, 40.651, -74.256, -74.050),
+    "Queens": (40.541, 40.800, -73.962, -73.700),
+    "Manhattan": (40.700, 40.882, -74.019, -73.907),
+    "Brooklyn": (40.570, 40.740, -74.042, -73.833),
 }
 
 
@@ -23,11 +24,31 @@ def get_borough_from_coords(latitude: float, longitude: float) -> str | None:
         Borough name ("Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island")
         or None if coordinates are outside NYC
     """
+    # Check each borough's bounds
+    # For overlapping regions, we check more specific/smaller boroughs first
+    matches = []
     for borough, (min_lat, max_lat, min_lon, max_lon) in BOROUGH_BOUNDS.items():
         if min_lat <= latitude <= max_lat and min_lon <= longitude <= max_lon:
-            return borough
+            matches.append(borough)
 
-    return None
+    if not matches:
+        return None
+
+    # If only one match, return it
+    if len(matches) == 1:
+        return matches[0]
+
+    # Handle overlapping cases with priority rules
+    # Manhattan takes priority in the south (lat < 40.71)
+    if latitude < 40.71 and "Manhattan" in matches:
+        return "Manhattan"
+
+    # Brooklyn takes priority in specific northern areas (lat > 40.73, lon west of -73.90)
+    if latitude > 40.73 and longitude < -73.90 and "Brooklyn" in matches:
+        return "Brooklyn"
+
+    # Default to first match (order in dict)
+    return matches[0]
 
 
 def parse_borough_input(user_input: str) -> str | None:

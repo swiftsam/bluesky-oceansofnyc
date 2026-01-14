@@ -34,19 +34,28 @@ class MockSightingsDatabase:
 
     def add_sighting(
         self,
-        plate_number: str,
-        borough: str,
+        plate_number: str | None = None,
+        license_plate: str | None = None,
+        borough: str | None = None,
         image_path: str | None = None,
         phone_number: str | None = None,
         contributor_id: int | None = None,
         gps_latitude: float | None = None,
         gps_longitude: float | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
+        timestamp: str | None = None,
         sha256_hash: str | None = None,
         perceptual_hash: str | None = None,
         r2_url: str | None = None,
         r2_url_web: str | None = None,
     ) -> dict:
         """Mock add sighting with duplicate detection."""
+        # Support both parameter names
+        plate = license_plate if license_plate else plate_number
+        lat = latitude if latitude is not None else gps_latitude
+        lon = longitude if longitude is not None else gps_longitude
+
         # Check for exact duplicate (SHA256)
         if sha256_hash:
             for sighting in self.sightings:
@@ -85,13 +94,13 @@ class MockSightingsDatabase:
 
         sighting = {
             "id": sighting_id,
-            "license_plate": plate_number,
+            "license_plate": plate,
             "borough": borough,
             "image_path": image_path,
             "phone_number": phone_number,
             "contributor_id": contributor_id,
-            "gps_latitude": gps_latitude,
-            "gps_longitude": gps_longitude,
+            "gps_latitude": lat,
+            "gps_longitude": lon,
             "image_hash_sha256": sha256_hash,
             "image_hash_perceptual": perceptual_hash,
             "r2_url": r2_url,

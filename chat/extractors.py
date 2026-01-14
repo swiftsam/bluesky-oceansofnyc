@@ -80,6 +80,7 @@ def extract_borough_from_text(text: str) -> str | None:
         "QUEENS": "Queens",
         "BRONX": "Bronx",
         "STATEN ISLAND": "Staten Island",
+        "BK": "Brooklyn",  # Common abbreviation
     }
 
     for keyword, canonical in borough_keywords.items():
