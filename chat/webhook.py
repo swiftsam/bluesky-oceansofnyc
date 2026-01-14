@@ -73,6 +73,33 @@ def trigger_web_data_generation():
         print(f"⚠️ Failed to trigger web data generation: {e}")
 
 
+def check_and_post_batch():
+    """
+    Check if conditions are met to trigger a batch post and do it if needed.
+
+    This is called after a sighting is saved to check if we should post immediately
+    based on:
+    - 4 or more sightings waiting, OR
+    - Oldest sighting has been waiting 24+ hours
+
+    This function is safe to call from webhooks - it won't block or fail the response.
+    """
+    try:
+        print("🔍 Checking if batch post should be triggered...")
+
+        # Import Modal function dynamically to avoid issues
+        # This assumes we're running in a Modal context
+        from modal_app import check_and_trigger_batch_post
+
+        # Call the Modal function asynchronously
+        check_and_trigger_batch_post.spawn()
+        print("✓ Batch post check spawned in background")
+
+    except Exception as e:
+        # Don't fail the webhook if batch check fails
+        print(f"⚠️ Failed to trigger batch post check: {e}")
+
+
 def handle_incoming_sms(
     from_number: str,
     body: str,
@@ -298,6 +325,7 @@ def handle_incoming_sms(
                             )
 
                         trigger_web_data_generation()
+                        check_and_post_batch()
 
                         if contributor_id != 1:
                             from notify import send_admin_notification
@@ -403,6 +431,7 @@ def handle_incoming_sms(
 
             # Trigger web data generation in background
             trigger_web_data_generation()
+            check_and_post_batch()
 
             # Send notification for successful submission (non-admin contributors only)
             if contributor_id != 1:
@@ -518,6 +547,7 @@ def handle_incoming_sms(
                     )
 
                 trigger_web_data_generation()
+                check_and_post_batch()
 
                 if contributor_id != 1:
                     from notify import send_admin_notification

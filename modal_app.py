@@ -57,6 +57,51 @@ MAPS_PATH = f"{VOLUME_PATH}/maps"
 TLC_PATH = f"{VOLUME_PATH}/tlc"
 
 
+@app.function(image=image, secrets=secrets)
+def check_and_trigger_batch_post():
+    """
+    Check if batch posting conditions are met and trigger a post if needed.
+
+    This function is called after each sighting is saved to determine if we should
+    post immediately based on:
+    - 4 or more sightings waiting, OR
+    - Oldest sighting has been waiting 24+ hours
+
+    Returns:
+        dict with status and any action taken
+    """
+    from database import SightingsDatabase
+    from post.batch_trigger import should_trigger_batch_post
+
+    print("🔍 Checking batch posting conditions...")
+
+    db = SightingsDatabase()
+    unposted = db.get_unposted_sightings()
+
+    if should_trigger_batch_post(unposted):
+        print("🚀 Triggering batch post...")
+        try:
+            # Trigger the batch post (will block until complete)
+            result = post_batch.remote(batch_size=4, dry_run=False)
+            return {
+                "status": "triggered",
+                "message": "Batch post completed",
+                "result": result,
+            }
+        except Exception as e:
+            print(f"❌ Error triggering batch post: {e}")
+            return {
+                "status": "error",
+                "message": f"Failed to trigger batch post: {e}",
+            }
+    else:
+        return {
+            "status": "not_triggered",
+            "message": "Conditions not met for batch posting",
+            "count": len(unposted),
+        }
+
+
 @app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume})
 def post_batch(batch_size: int = 4, dry_run: bool = False):
     """
@@ -161,24 +206,27 @@ def post_batch(batch_size: int = 4, dry_run: bool = False):
     image=image,
     secrets=secrets,
     volumes={VOLUME_PATH: volume},
-    schedule=modal.Cron("0 22 * * *"),  # Run daily at 6 PM ET (10 PM UTC)
+    schedule=modal.Cron("0 22 * * *"),  # Run daily at 10 PM UTC (6 PM ET) as backup
 )
 def post_sightings_queue():
     """
-    Scheduled function that runs daily at 6 PM ET.
+    Backup scheduled function that runs daily at 6 PM ET (10 PM UTC).
 
-    Processes all unposted sightings using the unified batch format:
-    - Posts up to 4 sightings at a time via post_batch()
-    - If 5+ sightings: posts first 4, then recursively processes remainder
-    - If no sightings: exits gracefully
+    This serves as a backup to the conditional posting system. It will post any
+    sightings that meet the criteria:
+    - 4 or more sightings waiting, OR
+    - Oldest sighting has been waiting 24+ hours
 
-    All posts use the same unified format showing contributor statistics.
+    Primary posting now happens immediately after sightings are saved via
+    check_and_trigger_batch_post(). This scheduled job ensures nothing gets
+    stuck in the queue if the conditional posting fails.
     """
     from datetime import datetime
 
     from database import SightingsDatabase
+    from post.batch_trigger import should_trigger_batch_post
 
-    print(f"⏰ Scheduled sightings queue post triggered at {datetime.now()}")
+    print(f"⏰ Backup scheduled post check triggered at {datetime.now()}")
 
     # Check how many unposted sightings we have
     db = SightingsDatabase()
@@ -191,8 +239,17 @@ def post_sightings_queue():
     num_sightings = len(sightings)
     print(f"Found {num_sightings} unposted sighting(s)")
 
-    # Always use batch format (unified format)
-    print(f"Using unified format for {min(num_sightings, 4)} sightings")
+    # Check if we should post based on conditions
+    if not should_trigger_batch_post(sightings):
+        print("✓ Conditions not met for posting - sightings will wait")
+        return {
+            "posted": 0,
+            "message": f"Conditions not met: {num_sightings} sightings waiting",
+            "count": num_sightings,
+        }
+
+    # Conditions met - post the batch
+    print(f"📮 Posting batch of {min(num_sightings, 4)} sightings")
     result = post_batch.remote(batch_size=4, dry_run=False)
     print(f"✓ Posted batch: {result}")
 
@@ -465,6 +522,13 @@ def web_submission_webhook():
                 generate_vehicle_data(upload_to_r2=True)
             except Exception as e:
                 print(f"Warning: Failed to regenerate web data: {e}")
+
+            # Check and trigger batch post if conditions are met
+            try:
+                check_and_trigger_batch_post.spawn()
+                print("✓ Batch post check spawned")
+            except Exception as e:
+                print(f"Warning: Failed to trigger batch post check: {e}")
 
             # Commit volume changes
             volume.commit()
