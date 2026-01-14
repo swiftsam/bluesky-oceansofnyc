@@ -29,3 +29,10 @@ maps/
 .modal/
 fiskers_of_nyc_logo.png
 oceans-of-nyc-architecture.png
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+*.cover
+.hypothesis/

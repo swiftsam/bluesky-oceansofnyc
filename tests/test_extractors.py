@@ -1,8 +1,11 @@
 """Tests for chat message extractors."""
 
+import pytest
+
 from chat.extractors import extract_borough_from_text, extract_plate_from_text
 
 
+@pytest.mark.unit
 class TestExtractPlateFromText:
     """Tests for license plate extraction."""
 
@@ -48,6 +51,7 @@ class TestExtractPlateFromText:
         assert extract_plate_from_text("Saw T123456C in Q") == "T123456C"
 
 
+@pytest.mark.unit
 class TestExtractBoroughFromText:
     """Tests for borough extraction."""
 
