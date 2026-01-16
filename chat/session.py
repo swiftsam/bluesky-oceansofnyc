@@ -71,6 +71,7 @@ class ChatSession:
         pending_longitude: float | None = None,
         pending_timestamp: datetime | None = None,
         pending_borough: str | None = None,
+        pending_image_timestamp: datetime | None = None,
     ):
         """Update session state.
 
@@ -119,6 +120,10 @@ class ChatSession:
             updates.append("pending_timestamp = %s")
             params.append(pending_timestamp)
 
+        if pending_image_timestamp is not None:
+            updates.append("pending_image_timestamp = %s")
+            params.append(pending_image_timestamp)
+
         updates.append("updated_at = CURRENT_TIMESTAMP")
 
         if len(updates) <= 1:  # Only updated_at
@@ -153,4 +158,5 @@ class ChatSession:
             pending_longitude=None,
             pending_timestamp=None,
             pending_borough=None,
+            pending_image_timestamp=None,
         )

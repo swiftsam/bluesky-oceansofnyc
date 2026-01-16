@@ -190,16 +190,25 @@ def handle_incoming_sms(
                     return create_twiml_response(messages.error_general())
 
                 # Process and save image (original + web version)
+                from geolocate.exif import extract_image_timestamp_from_bytes
                 from utils.image_processor import ImageProcessor
 
                 processor = ImageProcessor(volume_path=volume_path)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                # Extract image timestamp from EXIF, fallback to now
+                image_timestamp = extract_image_timestamp_from_bytes(image_data)
+                if image_timestamp is None:
+                    image_timestamp = datetime.now()
+
+                # Use a temporary placeholder filename for now
+                # Will be updated once we have the plate number
+                temp_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 phone_suffix = from_number[-4:]
-                filename = f"sighting_{timestamp}_{phone_suffix}.jpg"
+                temp_filename = f"pending_{temp_timestamp}_{phone_suffix}.jpg"
 
                 # Process image: save original, create web version, upload to R2
                 image_paths = processor.process_sighting_image(
-                    image_data, filename, upload_to_r2=True
+                    image_data, temp_filename, upload_to_r2=True
                 )
 
                 # Use original path for hash calculation
@@ -281,6 +290,7 @@ def handle_incoming_sms(
                         pending_timestamp=sighting_time,
                         pending_plate=validated_plate,
                         pending_borough=extracted_borough,
+                        pending_image_timestamp=image_timestamp,
                     )
 
                     # Determine what we're still missing and respond accordingly
@@ -296,6 +306,11 @@ def handle_incoming_sms(
                         print("✓ All data collected, saving sighting")
                         contributor_id = db.get_or_create_contributor(phone_number=from_number)
 
+                        # Generate unified filename
+                        final_filename = processor.generate_filename(
+                            validated_plate, image_timestamp
+                        )
+
                         result = db.add_sighting(
                             license_plate=validated_plate,
                             timestamp=sighting_time,
@@ -306,6 +321,8 @@ def handle_incoming_sms(
                             borough=extracted_borough if not lat else None,
                             image_path_original=image_path_original,
                             image_url_web=image_url_web,
+                            image_timestamp=image_timestamp,
+                            image_filename=final_filename,
                         )
 
                         if result is None:
@@ -395,10 +412,20 @@ def handle_incoming_sms(
             print(f"📍 Parsed borough: {borough}")
 
             # We have everything now - save the sighting
+            from utils.image_processor import ImageProcessor
+
             db = SightingsDatabase()
             contributor_id = db.get_or_create_contributor(phone_number=from_number)
 
             plate = session_data["pending_plate"]
+            image_timestamp = session_data.get("pending_image_timestamp")
+            if image_timestamp is None:
+                image_timestamp = datetime.now()
+
+            # Generate unified filename
+            processor = ImageProcessor(volume_path=volume_path)
+            final_filename = processor.generate_filename(plate, image_timestamp)
+
             result = db.add_sighting(
                 license_plate=plate,
                 timestamp=session_data["pending_timestamp"],
@@ -409,6 +436,8 @@ def handle_incoming_sms(
                 borough=borough,
                 image_path_original=session_data.get("pending_image_path_original"),
                 image_url_web=session_data.get("pending_image_url_web"),
+                image_timestamp=image_timestamp,
+                image_filename=final_filename,
             )
 
             if result is None:
@@ -516,7 +545,18 @@ def handle_incoming_sms(
             # If we have location data (GPS or borough), save immediately
             if has_gps or final_borough:
                 print("✓ All data collected, saving sighting")
+                from utils.image_processor import ImageProcessor
+
                 contributor_id = db.get_or_create_contributor(phone_number=from_number)
+
+                # Get image timestamp from session
+                image_timestamp = session_data.get("pending_image_timestamp")
+                if image_timestamp is None:
+                    image_timestamp = datetime.now()
+
+                # Generate unified filename
+                processor = ImageProcessor(volume_path=volume_path)
+                final_filename = processor.generate_filename(plate, image_timestamp)
 
                 result = db.add_sighting(
                     license_plate=plate,
@@ -528,6 +568,8 @@ def handle_incoming_sms(
                     borough=final_borough if not has_gps else None,
                     image_path_original=session_data.get("pending_image_path_original"),
                     image_url_web=session_data.get("pending_image_url_web"),
+                    image_timestamp=image_timestamp,
+                    image_filename=final_filename,
                 )
 
                 if result is None:

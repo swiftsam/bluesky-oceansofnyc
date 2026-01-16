@@ -159,6 +159,8 @@ class SightingsDatabase:
         borough: str | None = None,
         image_path_original: str | None = None,
         image_url_web: str | None = None,
+        image_timestamp: datetime | None = None,
+        image_filename: str | None = None,
     ):
         """
         Add a new sighting to the database.
@@ -175,6 +177,8 @@ class SightingsDatabase:
             borough: NYC borough name (Manhattan, Brooklyn, Queens, Bronx, Staten Island) or None
             image_path_original: Path to original full-resolution image in Modal volume
             image_url_web: Public URL to web-optimized image in R2 storage
+            image_timestamp: Timestamp when image was taken (from EXIF)
+            image_filename: Unified filename ({plate}_{yyyymmdd_hhmmss_ssss}.jpg)
 
         Returns:
             dict with keys:
@@ -232,8 +236,8 @@ class SightingsDatabase:
         try:
             cursor.execute(
                 """
-                INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id, image_hash_sha256, image_hash_perceptual, borough, image_path_original, image_url_web)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id, image_hash_sha256, image_hash_perceptual, borough, image_path_original, image_url_web, image_timestamp, image_filename)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """,
                 (
@@ -249,6 +253,8 @@ class SightingsDatabase:
                     borough,
                     image_path_original,
                     image_url_web,
+                    image_timestamp,
+                    image_filename,
                 ),
             )
 

@@ -444,26 +444,35 @@ def web_submission_webhook():
             # Calculate image hashes for duplicate detection
             sha256_hash, perceptual_hash = calculate_both_hashes_from_bytes(image_bytes)
 
+            # Extract image timestamp from EXIF
+            from geolocate.exif import extract_image_timestamp_from_bytes
+
+            image_timestamp = extract_image_timestamp_from_bytes(image_bytes)
+            if image_timestamp is None:
+                # Fallback to current time if no EXIF timestamp
+                image_timestamp = datetime.now()
+
             # Initialize database
             db = SightingsDatabase()
 
             # Process image: save original, create web version, upload to R2
             processor = ImageProcessor(volume_path=VOLUME_PATH)
 
-            # Generate filenames
-            timestamp = datetime.now()
-            timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
-            base_filename = f"web_sighting_{timestamp_str}_{hash(image_bytes) % 10000:04d}.jpg"
+            # Generate unified filename using new convention: {plate}_{timestamp}.jpg
+            image_filename = processor.generate_filename(plate, image_timestamp)
 
             # Save original image to volume
-            original_path = processor.save_original(image_bytes, base_filename)
+            original_path = processor.save_original(image_bytes, image_filename)
             print(f"💾 Saved original: {original_path}")
 
             # Create web-optimized version
             web_bytes, _ = processor.create_web_version_from_bytes(image_bytes)
 
-            # Upload web version to R2
-            r2_key = f"sightings/web_{base_filename}"
+            # Save web version locally
+            processor.save_web_version_local(web_bytes, image_filename)
+
+            # Upload web version to R2 (using same filename, no web_ prefix)
+            r2_key = f"sightings/{image_filename}"
             r2 = R2Storage()
             web_url = r2.upload_bytes(web_bytes, r2_key, content_type="image/jpeg")
             print(f"🌐 Web URL: {web_url}")
@@ -486,7 +495,7 @@ def web_submission_webhook():
             # Create sighting record
             result = db.add_sighting(
                 license_plate=plate,
-                timestamp=timestamp.isoformat(),
+                timestamp=image_timestamp.isoformat(),
                 latitude=None,
                 longitude=None,
                 image_path=original_path,  # Use original path for image_path
@@ -496,6 +505,8 @@ def web_submission_webhook():
                 image_url_web=web_url,
                 image_hash_sha256=sha256_hash,
                 image_hash_perceptual=perceptual_hash,
+                image_timestamp=image_timestamp,
+                image_filename=image_filename,
             )
 
             if result is None:
@@ -1083,6 +1094,200 @@ def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
     }
 
 
+@app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume}, timeout=3600)
+def migrate_image_storage(batch_size: int = 50, dry_run: bool = True):
+    """
+    Migrate existing sightings to new image storage format.
+
+    This function:
+    1. Finds all sightings without image_filename
+    2. Extracts EXIF timestamp from original image (or uses created_at)
+    3. Generates new filename: {plate}_{yyyymmdd_hhmmss_ssss}.jpg
+    4. Copies files to new paths in Modal volume
+    5. Uploads web version to R2 with new key
+    6. Updates database with image_timestamp and image_filename
+
+    Args:
+        batch_size: Number of images to process before committing (default: 50)
+        dry_run: If True, show what would be done without making changes (default: True)
+    """
+    import os
+    import shutil
+    from datetime import datetime
+
+    from database import SightingsDatabase
+    from geolocate.exif import extract_image_timestamp
+    from utils.image_processor import ImageProcessor
+    from utils.r2_storage import R2Storage
+
+    print("🔄 Starting image storage migration on Modal...")
+    print(f"   Batch size: {batch_size}")
+    if dry_run:
+        print("   DRY RUN MODE - no changes will be made")
+    print()
+
+    db = SightingsDatabase()
+    conn = db._get_connection()
+    cursor = conn.cursor()
+
+    # Get all sightings without image_filename
+    cursor.execute(
+        """
+        SELECT id, license_plate, image_path, image_path_original, created_at
+        FROM sightings
+        WHERE image_filename IS NULL
+        ORDER BY id ASC
+        """
+    )
+
+    sightings = cursor.fetchall()
+    total = len(sightings)
+
+    if total == 0:
+        print("✓ All sightings already have image_filename!")
+        conn.close()
+        return {"status": "complete", "processed": 0, "successful": 0, "skipped": 0}
+
+    print(f"Found {total} sightings to migrate\n")
+
+    # Initialize processors
+    processor = ImageProcessor(volume_path=VOLUME_PATH)
+    r2: R2Storage | None = None if dry_run else R2Storage()
+
+    processed = 0
+    successful = 0
+    skipped = 0
+    failed = []
+
+    for sighting_id, license_plate, image_path, image_path_original, created_at in sightings:
+        processed += 1
+
+        # Determine source image path (prefer original, fallback to image_path)
+        source_path = image_path_original if image_path_original else image_path
+
+        if not source_path:
+            print(f"⚠️  Sighting #{sighting_id}: No image path found")
+            skipped += 1
+            failed.append((sighting_id, None, "No image path"))
+            continue
+
+        # Check if file exists
+        if not os.path.exists(source_path):
+            print(f"⚠️  Sighting #{sighting_id}: Image file not found: {source_path}")
+            skipped += 1
+            failed.append((sighting_id, source_path, "File not found"))
+            continue
+
+        try:
+            # Extract EXIF timestamp, fallback to created_at
+            image_timestamp = extract_image_timestamp(source_path)
+            if image_timestamp is None:
+                if isinstance(created_at, str):
+                    image_timestamp = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                elif created_at:
+                    image_timestamp = created_at
+                else:
+                    image_timestamp = datetime.now()
+
+            # Generate new filename
+            new_filename = processor.generate_filename(license_plate, image_timestamp)
+
+            # New paths
+            new_original_path = f"{processor.originals_path}/{new_filename}"
+            new_web_path = f"{processor.web_path}/{new_filename}"
+            r2_key = f"sightings/{new_filename}"
+
+            if dry_run:
+                print(f"[DRY RUN] Sighting #{sighting_id}: {license_plate}")
+                print(f"  Source: {source_path}")
+                print(f"  New filename: {new_filename}")
+                print(f"  Timestamp: {image_timestamp}")
+                successful += 1
+            else:
+                # Copy to new original path
+                os.makedirs(os.path.dirname(new_original_path), exist_ok=True)
+                shutil.copy2(source_path, new_original_path)
+
+                # Create and save web version
+                web_bytes, _ = processor.create_web_version(new_original_path)
+                os.makedirs(os.path.dirname(new_web_path), exist_ok=True)
+                with open(new_web_path, "wb") as f:
+                    f.write(web_bytes)
+
+                # Upload to R2
+                if r2 is not None:
+                    r2.upload_bytes(web_bytes, r2_key, content_type="image/jpeg")
+
+                # Update database
+                cursor.execute(
+                    """
+                    UPDATE sightings
+                    SET image_timestamp = %s, image_filename = %s
+                    WHERE id = %s
+                    """,
+                    (image_timestamp, new_filename, sighting_id),
+                )
+
+                print(f"✓ Sighting #{sighting_id}: {new_filename}")
+                successful += 1
+
+                # Commit in batches
+                if successful % batch_size == 0:
+                    conn.commit()
+                    volume.commit()
+                    print(f"✓ Committed batch (total: {successful}/{total})")
+
+        except Exception as e:
+            print(f"❌ Sighting #{sighting_id}: Failed: {e}")
+            import traceback
+
+            traceback.print_exc()
+            failed.append((sighting_id, source_path, str(e)))
+            continue
+
+    # Final commit
+    if not dry_run and successful > 0:
+        conn.commit()
+        volume.commit()
+        print("\n✓ Final commit completed")
+
+    conn.close()
+
+    # Summary
+    print("\n" + "=" * 60)
+    print("MIGRATION SUMMARY")
+    print("=" * 60)
+    print(f"Total sightings processed: {processed}")
+    print(f"Successfully migrated:     {successful}")
+    print(f"Skipped (no file):         {skipped}")
+    print(f"Failed:                    {len(failed)}")
+
+    if failed and len(failed) <= 10:
+        print("\nFailed sightings:")
+        for sighting_id, image_path, error in failed:
+            print(f"  #{sighting_id}: {error}")
+            if image_path:
+                print(f"    Path: {image_path}")
+    elif failed:
+        print(f"\n{len(failed)} sightings failed (showing first 10):")
+        for sighting_id, _image_path, error in failed[:10]:
+            print(f"  #{sighting_id}: {error}")
+
+    if dry_run:
+        print("\n⚠️  DRY RUN - no changes were made")
+    else:
+        print(f"\n✅ Migration complete! Migrated {successful}/{total} sightings")
+
+    return {
+        "status": "complete",
+        "processed": processed,
+        "successful": successful,
+        "skipped": skipped,
+        "failed": len(failed),
+        "dry_run": dry_run,
+    }
+
+
 @app.local_entrypoint()
 def main(
     command: str = "stats",
@@ -1102,6 +1307,7 @@ def main(
         modal run modal_app.py --command=update-tlc
         modal run modal_app.py --command=backfill-hashes --dry-run=true
         modal run modal_app.py --command=generate-web-data
+        modal run modal_app.py --command=migrate-images --dry-run=true
     """
     import os
     from pathlib import Path
@@ -1162,8 +1368,12 @@ def main(
         print("🔄 Generating web data...")
         result = generate_web_data.remote()
         print(f"\n✓ Result: {result}")
+    elif command == "migrate-images":
+        print("🔄 Migrating image storage to new format...")
+        result = migrate_image_storage.remote(batch_size=50, dry_run=dry_run)
+        print(f"\n✓ Migration result: {result}")
     else:
         print(f"Unknown command: {command}")
         print(
-            "Available commands: test, stats, post, upload, sync-images, update-tlc, backfill-hashes, backfill-r2, generate-web-data"
+            "Available commands: test, stats, post, upload, sync-images, update-tlc, backfill-hashes, backfill-r2, generate-web-data, migrate-images"
         )

@@ -2,6 +2,7 @@
 
 import io
 import os
+from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
@@ -18,12 +19,55 @@ class ImageProcessor:
             volume_path: Base path for Modal volume storage
         """
         self.volume_path = volume_path
-        self.originals_path = f"{volume_path}/images/originals"
-        self.web_path = f"{volume_path}/images/web"
+
+        # Use env vars for paths, with backwards-compatible defaults
+        self.originals_path = os.getenv(
+            "SIGHTING_ORIGINAL_STORAGE_PATH", f"{volume_path}/sightings/original"
+        )
+        self.web_path = os.getenv("SIGHTING_WEB_STORAGE_PATH", f"{volume_path}/sightings/web")
+        self.image_base_uri = os.getenv(
+            "SIGHTING_IMAGE_BASE_URI", "https://cdn.oceansofnyc.com/sightings/"
+        )
+
+        # Handle relative paths (prepend volume_path)
+        if not self.originals_path.startswith("/"):
+            self.originals_path = f"{volume_path}/{self.originals_path}"
+        if not self.web_path.startswith("/"):
+            self.web_path = f"{volume_path}/{self.web_path}"
 
         # Ensure directories exist
         os.makedirs(self.originals_path, exist_ok=True)
         os.makedirs(self.web_path, exist_ok=True)
+
+    def generate_filename(self, license_plate: str, image_timestamp: datetime) -> str:
+        """
+        Generate unified filename for a sighting image.
+
+        Args:
+            license_plate: Vehicle license plate (e.g., "T680368C")
+            image_timestamp: Timestamp when image was taken
+
+        Returns:
+            Filename in format: {plate}_{yyyymmdd_hhmmss_ssss}.jpg
+            Example: T680368C_20251206_184123_2345.jpg
+        """
+        ts_str = image_timestamp.strftime("%Y%m%d_%H%M%S")
+        # Use microseconds / 100 to get 4-digit subsecond precision
+        micros = f"{image_timestamp.microsecond // 100:04d}"
+        return f"{license_plate}_{ts_str}_{micros}.jpg"
+
+    def get_web_url(self, filename: str) -> str:
+        """
+        Construct full web URL for an image filename.
+
+        Args:
+            filename: Image filename (e.g., "T680368C_20251206_184123_2345.jpg")
+
+        Returns:
+            Full URL (e.g., "https://cdn.oceansofnyc.com/sightings/T680368C_20251206_184123_2345.jpg")
+        """
+        base = self.image_base_uri.rstrip("/")
+        return f"{base}/{filename}"
 
     def save_original(self, image_data: bytes, filename: str) -> str:
         """
@@ -77,9 +121,9 @@ class ImageProcessor:
         img.save(buffer, format="JPEG", quality=quality, optimize=True)
         image_bytes = buffer.getvalue()
 
-        # Generate web filename
+        # Use same filename for web version (no web_ prefix in new scheme)
         original_filename = Path(original_path).name
-        web_filename = f"web_{original_filename}"
+        web_filename = original_filename
 
         return image_bytes, web_filename
 

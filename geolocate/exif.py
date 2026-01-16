@@ -189,3 +189,57 @@ def extract_timestamp_from_exif(image_path: str) -> str:
     """
     metadata = extract_image_metadata(image_path)
     return metadata["timestamp"]
+
+
+def extract_image_timestamp(image_path: str) -> datetime | None:
+    """
+    Extract DateTimeOriginal from EXIF as a datetime object.
+
+    Returns:
+        datetime object or None if not available in EXIF.
+        Unlike extract_timestamp_from_exif, does NOT fall back to current time.
+    """
+    try:
+        exif = get_exif_data(image_path)
+        datetime_original = exif.get("DateTimeOriginal") or exif.get("DateTime")
+
+        if not datetime_original:
+            return None
+
+        return datetime.strptime(datetime_original, "%Y:%m:%d %H:%M:%S")
+    except (ExifDataError, ValueError):
+        return None
+
+
+def extract_image_timestamp_from_bytes(image_bytes: bytes) -> datetime | None:
+    """
+    Extract DateTimeOriginal from EXIF of image bytes.
+
+    Args:
+        image_bytes: Raw image bytes
+
+    Returns:
+        datetime object or None if not available in EXIF.
+    """
+    import io
+
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+        exif_data = image._getexif()
+
+        if not exif_data:
+            return None
+
+        exif = {}
+        for tag_id, value in exif_data.items():
+            tag = TAGS.get(tag_id, tag_id)
+            exif[tag] = value
+
+        datetime_original = exif.get("DateTimeOriginal") or exif.get("DateTime")
+
+        if not datetime_original:
+            return None
+
+        return datetime.strptime(datetime_original, "%Y:%m:%d %H:%M:%S")
+    except (AttributeError, ValueError):
+        return None
