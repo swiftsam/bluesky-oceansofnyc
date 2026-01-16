@@ -498,11 +498,9 @@ def web_submission_webhook():
                 timestamp=image_timestamp.isoformat(),
                 latitude=None,
                 longitude=None,
-                image_path=original_path,  # Use original path for image_path
+                image_path=original_path,
                 contributor_id=contributor_id,
                 borough=borough,
-                image_path_original=original_path,  # Store original path
-                image_url_web=web_url,
                 image_hash_sha256=sha256_hash,
                 image_hash_perceptual=perceptual_hash,
                 image_timestamp=image_timestamp,
@@ -922,13 +920,12 @@ def generate_web_data():
 @app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume}, timeout=3600)
 def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
     """
-    Backfill existing images to Cloudflare R2 and update database URLs.
+    Backfill existing images to Cloudflare R2 and update database with unified filenames.
 
     This function:
-    1. Finds all sightings without image_url_web
-    2. Creates web-optimized versions from originals (or from image_path if no original)
-    3. Uploads to R2
-    4. Updates database with R2 URLs
+    1. Finds all sightings without image_filename
+    2. Creates web-optimized versions and uploads to R2
+    3. Updates database with image_filename
 
     Args:
         batch_size: Number of images to process before committing (default: 10)
@@ -950,12 +947,12 @@ def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
     conn = db._get_connection()
     cursor = conn.cursor()
 
-    # Get all sightings without R2 URLs
+    # Get all sightings without image_filename (indicating they haven't been migrated)
     cursor.execute(
         """
-        SELECT id, image_path, image_path_original
+        SELECT id, image_path
         FROM sightings
-        WHERE image_url_web IS NULL
+        WHERE image_filename IS NULL
         ORDER BY id ASC
         """
     )
@@ -964,11 +961,11 @@ def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
     total = len(sightings)
 
     if total == 0:
-        print("✓ All sightings already have R2 URLs!")
+        print("✓ All sightings already migrated!")
         conn.close()
         return {"status": "complete", "processed": 0, "successful": 0, "skipped": 0}
 
-    print(f"Found {total} sightings without R2 URLs\n")
+    print(f"Found {total} sightings to process\n")
 
     # Initialize processors
     processor = ImageProcessor(volume_path=VOLUME_PATH)
@@ -983,11 +980,10 @@ def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
     skipped = 0
     failed = []
 
-    for sighting_id, image_path, image_path_original in sightings:
+    for sighting_id, image_path in sightings:
         processed += 1
 
-        # Determine source image path (prefer original, fallback to image_path)
-        source_path = image_path_original if image_path_original else image_path
+        source_path = image_path
 
         if not source_path:
             print(f"⚠️  Sighting #{sighting_id}: No image path found")
@@ -1024,14 +1020,14 @@ def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
                 # Upload to R2
                 web_url = r2.upload_bytes(web_bytes, r2_key, content_type="image/jpeg")
 
-                # Update database
+                # Update database with image_filename
                 cursor.execute(
                     """
                     UPDATE sightings
-                    SET image_url_web = %s
+                    SET image_filename = %s
                     WHERE id = %s
                     """,
-                    (web_url, sighting_id),
+                    (web_filename, sighting_id),
                 )
 
                 print(f"✓ Sighting #{sighting_id}: Uploaded to {web_url}")
@@ -1133,7 +1129,7 @@ def migrate_image_storage(batch_size: int = 50, dry_run: bool = True):
     # Get all sightings without image_filename
     cursor.execute(
         """
-        SELECT id, license_plate, image_path, image_path_original, created_at
+        SELECT id, license_plate, image_path, created_at
         FROM sightings
         WHERE image_filename IS NULL
         ORDER BY id ASC
@@ -1159,11 +1155,10 @@ def migrate_image_storage(batch_size: int = 50, dry_run: bool = True):
     skipped = 0
     failed = []
 
-    for sighting_id, license_plate, image_path, image_path_original, created_at in sightings:
+    for sighting_id, license_plate, image_path, created_at in sightings:
         processed += 1
 
-        # Determine source image path (prefer original, fallback to image_path)
-        source_path = image_path_original if image_path_original else image_path
+        source_path = image_path
 
         if not source_path:
             print(f"⚠️  Sighting #{sighting_id}: No image path found")

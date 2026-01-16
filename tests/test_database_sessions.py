@@ -164,20 +164,17 @@ class TestChatSessionPendingData:
         data = session.get()
         assert data["pending_borough"] == "Brooklyn"
 
-    def test_store_r2_urls(self, test_db_url, clean_db):
-        """Test storing R2 image URLs."""
+    def test_store_image_path(self, test_db_url, clean_db):
+        """Test storing image path."""
         session = ChatSession("+15552222333", test_db_url)
         session.get()
 
         session.update(
             pending_image_path="/modal/volume/image.jpg",
-            pending_image_path_original="/modal/volume/image_original.jpg",
-            pending_image_url_web="https://r2.dev/web/image.jpg",
         )
 
         data = session.get()
-        assert data["pending_image_path_original"] == "/modal/volume/image_original.jpg"
-        assert data["pending_image_url_web"] == "https://r2.dev/web/image.jpg"
+        assert data["pending_image_path"] == "/modal/volume/image.jpg"
 
 
 @pytest.mark.db

@@ -213,12 +213,8 @@ def handle_incoming_sms(
 
                 # Use original path for hash calculation
                 image_path = image_paths["original_path"]
-                image_path_original = image_paths["original_path"]
-                image_url_web = image_paths.get("web_url")
 
                 print(f"💾 Saved original: {image_path}")
-                if image_url_web:
-                    print(f"🌐 Web URL: {image_url_web}")
 
                 # Extract GPS coordinates and timestamp
                 try:
@@ -283,8 +279,6 @@ def handle_incoming_sms(
                     session.update(
                         state=ChatSession.AWAITING_PLATE,
                         pending_image_path=image_path,
-                        pending_image_path_original=image_path_original,
-                        pending_image_url_web=image_url_web,
                         pending_latitude=lat,
                         pending_longitude=lon,
                         pending_timestamp=sighting_time,
@@ -319,8 +313,6 @@ def handle_incoming_sms(
                             image_path=image_path,
                             contributor_id=contributor_id,
                             borough=extracted_borough if not lat else None,
-                            image_path_original=image_path_original,
-                            image_url_web=image_url_web,
                             image_timestamp=image_timestamp,
                             image_filename=final_filename,
                         )
@@ -434,8 +426,6 @@ def handle_incoming_sms(
                 image_path=session_data["pending_image_path"],
                 contributor_id=contributor_id,
                 borough=borough,
-                image_path_original=session_data.get("pending_image_path_original"),
-                image_url_web=session_data.get("pending_image_url_web"),
                 image_timestamp=image_timestamp,
                 image_filename=final_filename,
             )
@@ -566,8 +556,6 @@ def handle_incoming_sms(
                     image_path=session_data["pending_image_path"],
                     contributor_id=contributor_id,
                     borough=final_borough if not has_gps else None,
-                    image_path_original=session_data.get("pending_image_path_original"),
-                    image_url_web=session_data.get("pending_image_url_web"),
                     image_timestamp=image_timestamp,
                     image_filename=final_filename,
                 )

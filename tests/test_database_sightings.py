@@ -161,9 +161,10 @@ class TestAddSighting:
         # Should be rejected due to unique constraint on image_path
         assert result2 is None
 
-    def test_add_sighting_with_r2_urls(self, test_db_url, sample_contributor, temp_image):
-        """Test adding sighting with R2 URLs."""
+    def test_add_sighting_with_image_filename(self, test_db_url, sample_contributor, temp_image):
+        """Test adding sighting with image filename."""
         db = SightingsDatabase(test_db_url)
+        image_timestamp = datetime.now()
 
         result = db.add_sighting(
             license_plate="T890123C",
@@ -172,14 +173,14 @@ class TestAddSighting:
             longitude=-73.9851,
             image_path=str(temp_image),
             contributor_id=sample_contributor,
-            image_path_original=str(temp_image),
-            image_url_web="https://r2.dev/web/image123.jpg",
+            image_timestamp=image_timestamp,
+            image_filename="T890123C_20251206_184123_0000.jpg",
         )
 
         assert result is not None
         sighting = db.get_sighting_by_id(result["id"])
-        # Verify R2 URL was saved (column 11)
-        assert sighting[11] == "https://r2.dev/web/image123.jpg"
+        # Verify image_filename was saved (column 13)
+        assert sighting[13] == "T890123C_20251206_184123_0000.jpg"
 
     def test_add_sighting_without_gps(self, test_db_url, sample_contributor, temp_image):
         """Test adding sighting without GPS coordinates."""

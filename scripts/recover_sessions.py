@@ -51,8 +51,6 @@ def display_session(session: dict) -> None:
     print("-" * 60)
     print(f"Pending plate: {session.get('pending_plate') or '(missing)'}")
     print(f"Pending image: {session.get('pending_image_path') or '(missing)'}")
-    print(f"Pending image (original): {session.get('pending_image_path_original') or '(none)'}")
-    print(f"Pending web URL: {session.get('pending_image_url_web') or '(none)'}")
     print(f"Pending timestamp: {session.get('pending_timestamp') or '(missing)'}")
     print(f"Pending latitude: {session.get('pending_latitude') or '(none)'}")
     print(f"Pending longitude: {session.get('pending_longitude') or '(none)'}")
@@ -161,13 +159,12 @@ def recover_session(session: dict, db_url: str) -> bool:
                     UPDATE chat_sessions
                     SET state = 'idle',
                         pending_image_path = NULL,
-                        pending_image_path_original = NULL,
-                        pending_image_url_web = NULL,
                         pending_plate = NULL,
                         pending_latitude = NULL,
                         pending_longitude = NULL,
                         pending_timestamp = NULL,
                         pending_borough = NULL,
+                        pending_image_timestamp = NULL,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE phone_number = %s
                 """,
@@ -227,8 +224,7 @@ def recover_session(session: dict, db_url: str) -> bool:
 
     # Image paths
     image_path = session.get("pending_image_path")
-    image_path_original = session.get("pending_image_path_original")
-    image_url_web = session.get("pending_image_url_web")
+    image_timestamp = session.get("pending_image_timestamp")
 
     if not image_path:
         print("\n⚠️  No image path found. This session cannot be recovered without an image.")
@@ -240,7 +236,6 @@ def recover_session(session: dict, db_url: str) -> bool:
     print(f"Timestamp: {timestamp}")
     print(f"Location: {f'{lat}, {lon}' if lat and lon else f'{borough or 'Unknown'}'}")
     print(f"Image: {image_path}")
-    print(f"Web URL: {image_url_web or '(none)'}")
 
     confirm = input("\nSave this sighting? [Y/n]: ").strip().lower()
     if confirm == "n":
@@ -254,6 +249,14 @@ def recover_session(session: dict, db_url: str) -> bool:
         # Get or create contributor from the session's phone number
         contributor_id = db.get_or_create_contributor(phone_number=session["phone_number"])
 
+        # Generate image filename
+        from utils.image_processor import ImageProcessor
+
+        processor = ImageProcessor()
+        if image_timestamp is None:
+            image_timestamp = timestamp if isinstance(timestamp, datetime) else datetime.now()
+        image_filename = processor.generate_filename(plate, image_timestamp)
+
         result = db.add_sighting(
             license_plate=plate,
             timestamp=timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp),
@@ -262,8 +265,8 @@ def recover_session(session: dict, db_url: str) -> bool:
             image_path=image_path,
             contributor_id=contributor_id,
             borough=borough,
-            image_path_original=image_path_original,
-            image_url_web=image_url_web,
+            image_timestamp=image_timestamp,
+            image_filename=image_filename,
         )
 
         if result is None:
@@ -289,13 +292,12 @@ def recover_session(session: dict, db_url: str) -> bool:
                     UPDATE chat_sessions
                     SET state = 'idle',
                         pending_image_path = NULL,
-                        pending_image_path_original = NULL,
-                        pending_image_url_web = NULL,
                         pending_plate = NULL,
                         pending_latitude = NULL,
                         pending_longitude = NULL,
                         pending_timestamp = NULL,
                         pending_borough = NULL,
+                        pending_image_timestamp = NULL,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE phone_number = %s
                 """,

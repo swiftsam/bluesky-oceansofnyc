@@ -37,18 +37,16 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
     cursor = conn.cursor()
 
     # Get all TLC vehicles with their most recent sighting
-    # Include both image_filename (new) and image_url_web (legacy) for compatibility
     cursor.execute("""
         SELECT
             t.dmv_license_plate_number,
             t.vehicle_vin_number,
             s.image_filename,
-            s.image_url_web,
             s.borough,
             s.timestamp
         FROM tlc_vehicles t
         LEFT JOIN LATERAL (
-            SELECT image_filename, image_url_web, borough, timestamp
+            SELECT image_filename, borough, timestamp
             FROM sightings
             WHERE license_plate = t.dmv_license_plate_number
             ORDER BY timestamp DESC
@@ -62,15 +60,13 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
     vehicle_rows = cursor.fetchall()
 
     # Get all sightings for vehicles that have them
-    # Include both image_filename (new) and image_url_web (legacy)
     cursor.execute("""
         SELECT
             s.license_plate,
             s.timestamp,
             s.borough,
             c.preferred_name,
-            s.image_filename,
-            s.image_url_web
+            s.image_filename
         FROM sightings s
         JOIN contributors c ON s.contributor_id = c.id
         WHERE s.license_plate IN (
@@ -82,12 +78,8 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
     # Build a dict of sightings by license plate
     sightings_by_plate: dict[str, list[dict[str, str | None]]] = {}
     for row in cursor.fetchall():
-        plate, timestamp, borough, preferred_name, image_filename, image_url_web = row
-        # Prefer image_filename with base URI, fall back to legacy image_url_web
-        if image_filename:
-            image_url = f"{image_base_uri}/{image_filename}"
-        else:
-            image_url = image_url_web
+        plate, timestamp, borough, preferred_name, image_filename = row
+        image_url = f"{image_base_uri}/{image_filename}" if image_filename else None
         if plate not in sightings_by_plate:
             sightings_by_plate[plate] = []
         sightings_by_plate[plate].append(
@@ -102,12 +94,8 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
     # Build vehicles array
     vehicles = []
     for row in vehicle_rows:
-        plate, vin, image_filename, image_url_web, borough, timestamp = row
-        # Prefer image_filename with base URI, fall back to legacy image_url_web
-        if image_filename:
-            image_url = f"{image_base_uri}/{image_filename}"
-        else:
-            image_url = image_url_web
+        plate, vin, image_filename, borough, timestamp = row
+        image_url = f"{image_base_uri}/{image_filename}" if image_filename else None
         vehicle_data = {
             "plate": plate,
             "vin": vin,
