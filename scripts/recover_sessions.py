@@ -258,9 +258,16 @@ def recover_session(session: dict, db_url: str) -> bool:
         image_filename = processor.generate_filename(plate, image_timestamp)
         processor.rename_to_final(image_path, image_filename)
 
+        # Ensure timestamp is a datetime object
+        if not isinstance(timestamp, datetime):
+            try:
+                timestamp = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+            except ValueError:
+                timestamp = datetime.now()
+
         result = db.add_sighting(
             license_plate=plate,
-            timestamp=timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp),
+            timestamp=timestamp,
             latitude=lat,
             longitude=lon,
             contributor_id=contributor_id,

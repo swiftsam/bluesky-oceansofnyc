@@ -44,7 +44,7 @@ class MockSightingsDatabase:
         gps_longitude: float | None = None,
         latitude: float | None = None,
         longitude: float | None = None,
-        timestamp: str | None = None,
+        timestamp: datetime | str | None = None,
         sha256_hash: str | None = None,
         perceptual_hash: str | None = None,
         image_hash_sha256: str | None = None,

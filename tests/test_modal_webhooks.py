@@ -3,6 +3,8 @@
 These tests use mocks to test the webhook logic without requiring Modal infrastructure.
 """
 
+from datetime import datetime
+
 import pytest
 
 
@@ -30,7 +32,7 @@ class TestWebSubmissionWebhook:
             borough="Manhattan",
             image_filename="T123456C_20251206_184123_0000.jpg",
             contributor_id=contributor_id,
-            timestamp="2025-01-13T12:00:00",
+            timestamp=datetime(2025, 1, 13, 12, 0, 0),
             latitude=None,
             longitude=None,
             image_hash_sha256=sha256_hash,
@@ -55,7 +57,7 @@ class TestWebSubmissionWebhook:
             borough="Manhattan",
             image_filename="T123456C_20251206_184123_0000.jpg",
             contributor_id=contributor_id,
-            timestamp="2025-01-13T12:00:00",
+            timestamp=datetime(2025, 1, 13, 12, 0, 0),
             latitude=None,
             longitude=None,
             image_hash_sha256=sha256_hash,
@@ -69,7 +71,7 @@ class TestWebSubmissionWebhook:
             borough="Manhattan",
             image_filename="T123456C_20251206_184123_0001.jpg",
             contributor_id=contributor_id,
-            timestamp="2025-01-13T12:01:00",
+            timestamp=datetime(2025, 1, 13, 12, 1, 0),
             latitude=None,
             longitude=None,
             image_hash_sha256=sha256_hash,
@@ -182,7 +184,7 @@ class TestSMSWebhookFlow:
             borough="Brooklyn",
             image_filename="T234567C_20251206_184123_0000.jpg",
             contributor_id=contributor_id,
-            timestamp="2025-01-13T12:00:00",
+            timestamp=datetime(2025, 1, 13, 12, 0, 0),
             latitude=None,
             longitude=None,
             image_hash_sha256="abc123" * 10 + "abcd",  # Dummy hash

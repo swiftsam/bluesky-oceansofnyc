@@ -495,7 +495,7 @@ def web_submission_webhook():
             # Create sighting record
             result = db.add_sighting(
                 license_plate=plate,
-                timestamp=image_timestamp.isoformat(),
+                timestamp=image_timestamp,
                 latitude=None,
                 longitude=None,
                 contributor_id=contributor_id,

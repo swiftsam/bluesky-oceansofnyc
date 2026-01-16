@@ -27,7 +27,7 @@ class TestAddSighting:
 
         result = db.add_sighting(
             license_plate="T123456C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T123456C_20251206_184123_0000.jpg",
@@ -52,7 +52,7 @@ class TestAddSighting:
         # Times Square coordinates
         result = db.add_sighting(
             license_plate="T234567C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T234567C_20251206_184123_0000.jpg",
@@ -80,7 +80,7 @@ class TestAddSighting:
         # Add first sighting
         result1 = db.add_sighting(
             license_plate="T345678C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T345678C_20251206_184123_0000.jpg",
@@ -93,7 +93,7 @@ class TestAddSighting:
         # Try to add exact duplicate
         result2 = db.add_sighting(
             license_plate="T345678C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T345678C_20251206_184123_0001.jpg",  # Different filename
@@ -116,7 +116,7 @@ class TestAddSighting:
         # Add first sighting with perceptual hash
         result1 = db.add_sighting(
             license_plate="T456789C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T456789C_20251206_184123_0000.jpg",
@@ -134,7 +134,7 @@ class TestAddSighting:
 
         result2 = db.add_sighting(
             license_plate="T567890C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T567890C_20251206_184123_0000.jpg",
@@ -159,7 +159,7 @@ class TestAddSighting:
 
         result = db.add_sighting(
             license_plate="T890123C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T890123C_20251206_184123_0000.jpg",
@@ -183,7 +183,7 @@ class TestAddSighting:
 
         result = db.add_sighting(
             license_plate="T901234C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=None,
             longitude=None,
             image_filename="T901234C_20251206_184123_0000.jpg",
@@ -212,7 +212,7 @@ class TestSightingQueries:
             sha256, phash = calculate_both_hashes(str(img))
             db.add_sighting(
                 license_plate="T111111C",
-                timestamp=datetime.now().isoformat(),
+                timestamp=datetime.now(),
                 latitude=40.7589,
                 longitude=-73.9851,
                 image_filename=f"T111111C_20251206_18412{i}_0000.jpg",
@@ -234,7 +234,7 @@ class TestSightingQueries:
         # Add sighting
         result = db.add_sighting(
             license_plate="T222222C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T222222C_20251206_184123_0000.jpg",
@@ -261,7 +261,7 @@ class TestSightingQueries:
         # Add sighting
         result = db.add_sighting(
             license_plate="T333333C",
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(),
             latitude=40.7589,
             longitude=-73.9851,
             image_filename="T333333C_20251206_184123_0000.jpg",

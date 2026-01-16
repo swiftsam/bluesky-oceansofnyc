@@ -149,7 +149,7 @@ class SightingsDatabase:
     def add_sighting(
         self,
         license_plate: str,
-        timestamp: str,
+        timestamp: datetime | str,
         latitude: float | None,
         longitude: float | None,
         contributor_id: int,
@@ -164,7 +164,7 @@ class SightingsDatabase:
 
         Args:
             license_plate: License plate number (required)
-            timestamp: ISO timestamp of sighting
+            timestamp: Timestamp of sighting (datetime preferred, ISO string accepted for backwards compat)
             latitude: GPS latitude (or None)
             longitude: GPS longitude (or None)
             contributor_id: ID of contributor (required)
