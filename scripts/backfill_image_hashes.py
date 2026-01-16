@@ -26,6 +26,7 @@ load_dotenv(project_root / ".env")
 # ruff: noqa: E402 - imports must come after load_dotenv
 from database import SightingsDatabase
 from utils.image_hashing import ImageHashError, calculate_both_hashes
+from utils.image_processor import ImageProcessor
 
 
 @click.command()
@@ -51,7 +52,7 @@ def backfill_hashes(batch_size: int, dry_run: bool):
     # Get all sightings without hashes
     cursor.execute(
         """
-        SELECT id, image_path
+        SELECT id, image_filename
         FROM sightings
         WHERE image_hash_sha256 IS NULL OR image_hash_perceptual IS NULL
         ORDER BY id ASC
@@ -68,20 +69,26 @@ def backfill_hashes(batch_size: int, dry_run: bool):
 
     click.echo(f"Found {total} sightings without hashes\n")
 
+    # Initialize image processor to derive paths
+    processor = ImageProcessor()
+
     processed = 0
     successful = 0
     skipped = 0
     failed = []
 
     with click.progressbar(sightings, label="Processing sightings", show_pos=True) as bar:
-        for sighting_id, image_path in bar:
+        for sighting_id, image_filename in bar:
             processed += 1
+
+            # Derive path from filename
+            image_path = processor.get_original_path(image_filename)
 
             # Check if file exists
             if not os.path.exists(image_path):
                 click.echo(f"\n⚠️  Sighting #{sighting_id}: Image file not found: {image_path}")
                 skipped += 1
-                failed.append((sighting_id, image_path, "File not found"))
+                failed.append((sighting_id, image_filename, "File not found"))
                 continue
 
             try:
@@ -114,12 +121,12 @@ def backfill_hashes(batch_size: int, dry_run: bool):
 
             except ImageHashError as e:
                 click.echo(f"\n❌ Sighting #{sighting_id}: Failed to calculate hashes: {e}")
-                failed.append((sighting_id, image_path, str(e)))
+                failed.append((sighting_id, image_filename, str(e)))
                 continue
 
             except Exception as e:
                 click.echo(f"\n❌ Sighting #{sighting_id}: Unexpected error: {e}")
-                failed.append((sighting_id, image_path, str(e)))
+                failed.append((sighting_id, image_filename, str(e)))
                 continue
 
     # Final commit
@@ -140,9 +147,9 @@ def backfill_hashes(batch_size: int, dry_run: bool):
 
     if failed:
         click.echo("\nFailed sightings:")
-        for sighting_id, image_path, error in failed[:10]:  # Show first 10
+        for sighting_id, image_filename, error in failed[:10]:  # Show first 10
             click.echo(f"  #{sighting_id}: {error}")
-            click.echo(f"    Path: {image_path}")
+            click.echo(f"    Filename: {image_filename}")
         if len(failed) > 10:
             click.echo(f"  ... and {len(failed) - 10} more")
 

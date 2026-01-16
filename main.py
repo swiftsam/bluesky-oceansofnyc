@@ -1,5 +1,8 @@
+import os
+import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -93,14 +96,28 @@ def process(image_path: str, license_plate: str):
 
         previous_count = db.get_sighting_count(license_plate)
 
+        # Generate unified filename and copy to expected location
+        from utils.image_processor import ImageProcessor
+
+        processor = ImageProcessor()
+        image_timestamp = datetime.fromisoformat(metadata["timestamp"].replace("Z", "+00:00"))
+        image_filename = processor.generate_filename(license_plate, image_timestamp)
+
+        # Copy source image to the expected location
+        import shutil
+
+        dest_path = processor.get_original_path(image_filename)
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        shutil.copy2(str(Path(image_path).absolute()), dest_path)
+
         # Use default contributor ID (1) for CLI-added sightings
         result = db.add_sighting(
             license_plate=license_plate,
             timestamp=metadata["timestamp"],
             latitude=metadata["latitude"],
             longitude=metadata["longitude"],
-            image_path=str(Path(image_path).absolute()),
             contributor_id=1,
+            image_filename=image_filename,
             image_hash_sha256=metadata.get("image_hash_sha256"),
             image_hash_perceptual=metadata.get("image_hash_perceptual"),
         )
@@ -548,14 +565,28 @@ def batch_process(images_dir: str, preview: bool):
                     # Use default contributor (ID 1)
                     contributor_id = 1
 
+                # Generate unified filename and copy to expected location
+                from utils.image_processor import ImageProcessor
+
+                processor = ImageProcessor()
+                image_timestamp = datetime.fromisoformat(
+                    metadata["timestamp"].replace("Z", "+00:00")
+                )
+                image_filename = processor.generate_filename(license_plate, image_timestamp)
+
+                # Copy source image to the expected location
+                dest_path = processor.get_original_path(image_filename)
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                shutil.copy2(str(image_path.absolute()), dest_path)
+
                 # Save to database
                 result = db.add_sighting(
                     license_plate=license_plate,
                     timestamp=metadata["timestamp"],
                     latitude=metadata["latitude"],
                     longitude=metadata["longitude"],
-                    image_path=str(image_path.absolute()),
                     contributor_id=contributor_id,
+                    image_filename=image_filename,
                     image_hash_sha256=metadata.get("image_hash_sha256"),
                     image_hash_perceptual=metadata.get("image_hash_perceptual"),
                 )

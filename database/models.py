@@ -152,13 +152,12 @@ class SightingsDatabase:
         timestamp: str,
         latitude: float | None,
         longitude: float | None,
-        image_path: str,
         contributor_id: int,
+        image_filename: str,
         image_hash_sha256: str | None = None,
         image_hash_perceptual: str | None = None,
         borough: str | None = None,
         image_timestamp: datetime | None = None,
-        image_filename: str | None = None,
     ):
         """
         Add a new sighting to the database.
@@ -168,23 +167,22 @@ class SightingsDatabase:
             timestamp: ISO timestamp of sighting
             latitude: GPS latitude (or None)
             longitude: GPS longitude (or None)
-            image_path: Path to image file (Modal volume, used for Bluesky posting)
             contributor_id: ID of contributor (required)
+            image_filename: Unified filename ({plate}_{yyyymmdd_hhmmss_ssss}.jpg)
             image_hash_sha256: SHA-256 hash of image (optional, calculated if not provided)
             image_hash_perceptual: Perceptual hash of image (optional, calculated if not provided)
             borough: NYC borough name (Manhattan, Brooklyn, Queens, Bronx, Staten Island) or None
             image_timestamp: Timestamp when image was taken (from EXIF)
-            image_filename: Unified filename ({plate}_{yyyymmdd_hhmmss_ssss}.jpg)
 
         Returns:
             dict with keys:
                 - 'id': The ID of the inserted sighting
                 - 'duplicate_type': None if new, 'exact' or 'similar' if duplicate detected
                 - 'duplicate_info': Dict with duplicate sighting info if applicable
-            Returns None if duplicate is rejected (exact match or path collision)
+            Returns None if exact duplicate is detected (same SHA-256 hash)
 
         Raises:
-            psycopg2.Error: For database errors other than duplicate image_path.
+            psycopg2.Error: For database errors.
         """
         from utils.image_hashing import (
             ImageHashError,
@@ -192,9 +190,14 @@ class SightingsDatabase:
             check_exact_duplicate,
             find_similar_images,
         )
+        from utils.image_processor import ImageProcessor
 
         conn = self._get_connection()
         cursor = conn.cursor()
+
+        # Derive image path from filename for hash calculation
+        processor = ImageProcessor()
+        image_path = processor.get_original_path(image_filename)
 
         # Calculate hashes if not provided
         if image_hash_sha256 is None or image_hash_perceptual is None:
@@ -232,8 +235,8 @@ class SightingsDatabase:
         try:
             cursor.execute(
                 """
-                INSERT INTO sightings (license_plate, timestamp, latitude, longitude, image_path, created_at, contributor_id, image_hash_sha256, image_hash_perceptual, borough, image_timestamp, image_filename)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO sightings (license_plate, timestamp, latitude, longitude, created_at, contributor_id, image_hash_sha256, image_hash_perceptual, borough, image_timestamp, image_filename)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """,
                 (
@@ -241,7 +244,6 @@ class SightingsDatabase:
                     timestamp,
                     latitude,
                     longitude,
-                    image_path,
                     created_at,
                     contributor_id,
                     image_hash_sha256,
@@ -266,7 +268,8 @@ class SightingsDatabase:
 
         except psycopg2.errors.UniqueViolation:
             conn.rollback()
-            # Image path already exists - this is expected behavior
+            # Unique constraint violation - unexpected, log and return None
+            print("Warning: UniqueViolation in add_sighting - possible duplicate")
             return None
         finally:
             conn.close()
@@ -392,14 +395,14 @@ class SightingsDatabase:
         Get all sightings that haven't been posted yet.
 
         Returns tuples with contributor info:
-        (id, license_plate, timestamp, latitude, longitude, image_path, created_at, post_uri,
+        (id, license_plate, timestamp, latitude, longitude, image_filename, created_at, post_uri,
          contributor_id, preferred_name, bluesky_handle, phone_number)
         """
         conn = self._get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT s.id, s.license_plate, s.timestamp, s.latitude, s.longitude, s.image_path,
+            SELECT s.id, s.license_plate, s.timestamp, s.latitude, s.longitude, s.image_filename,
                    s.created_at, s.post_uri, s.contributor_id,
                    c.preferred_name, c.bluesky_handle, c.phone_number
             FROM sightings s

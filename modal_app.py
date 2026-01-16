@@ -498,13 +498,12 @@ def web_submission_webhook():
                 timestamp=image_timestamp.isoformat(),
                 latitude=None,
                 longitude=None,
-                image_path=original_path,
                 contributor_id=contributor_id,
-                borough=borough,
+                image_filename=image_filename,
                 image_hash_sha256=sha256_hash,
                 image_hash_perceptual=perceptual_hash,
+                borough=borough,
                 image_timestamp=image_timestamp,
-                image_filename=image_filename,
             )
 
             if result is None:

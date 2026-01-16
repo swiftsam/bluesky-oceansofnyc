@@ -249,24 +249,24 @@ def recover_session(session: dict, db_url: str) -> bool:
         # Get or create contributor from the session's phone number
         contributor_id = db.get_or_create_contributor(phone_number=session["phone_number"])
 
-        # Generate image filename
+        # Generate image filename and rename to final location
         from utils.image_processor import ImageProcessor
 
         processor = ImageProcessor()
         if image_timestamp is None:
             image_timestamp = timestamp if isinstance(timestamp, datetime) else datetime.now()
         image_filename = processor.generate_filename(plate, image_timestamp)
+        processor.rename_to_final(image_path, image_filename)
 
         result = db.add_sighting(
             license_plate=plate,
             timestamp=timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp),
             latitude=lat,
             longitude=lon,
-            image_path=image_path,
             contributor_id=contributor_id,
+            image_filename=image_filename,
             borough=borough,
             image_timestamp=image_timestamp,
-            image_filename=image_filename,
         )
 
         if result is None:

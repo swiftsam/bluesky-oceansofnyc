@@ -69,6 +69,47 @@ class ImageProcessor:
         base = self.image_base_uri.rstrip("/")
         return f"{base}/{filename}"
 
+    def get_original_path(self, filename: str) -> str:
+        """
+        Derive full path to original image from filename.
+
+        Args:
+            filename: Image filename (e.g., "T680368C_20251206_184123_2345.jpg")
+
+        Returns:
+            Full path (e.g., "/data/sightings/original/T680368C_20251206_184123_2345.jpg")
+        """
+        return f"{self.originals_path}/{filename}"
+
+    def rename_to_final(self, temp_path: str, final_filename: str) -> str:
+        """
+        Rename a temp file to its final filename location.
+
+        Args:
+            temp_path: Current path to the temp file
+            final_filename: The final filename (e.g., "T680368C_20251206_184123_2345.jpg")
+
+        Returns:
+            Path to the renamed file
+        """
+        import shutil
+
+        final_path = self.get_original_path(final_filename)
+        final_web_path = f"{self.web_path}/{final_filename}"
+
+        # Rename original file
+        if temp_path != final_path and os.path.exists(temp_path):
+            os.makedirs(os.path.dirname(final_path), exist_ok=True)
+            shutil.move(temp_path, final_path)
+
+        # Also rename web version if it exists at temp location
+        temp_filename = Path(temp_path).name
+        temp_web_path = f"{self.web_path}/{temp_filename}"
+        if os.path.exists(temp_web_path) and temp_web_path != final_web_path:
+            shutil.move(temp_web_path, final_web_path)
+
+        return final_path
+
     def save_original(self, image_data: bytes, filename: str) -> str:
         """
         Save original full-resolution image to volume.

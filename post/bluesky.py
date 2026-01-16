@@ -255,12 +255,17 @@ class BlueskyClient:
                 text_builder.text(f" +{count_in_batch} → {total_count}\n")
 
         # Collect images (max 4)
+        from utils.image_processor import ImageProcessor
+
+        processor = ImageProcessor()
         images = []
         image_alts = []
         for sighting in sightings[:4]:  # Only take first 4 for image limit
-            image_path = sighting[5]  # image_path column
+            image_filename = sighting[5]  # image_filename column
             license_plate = sighting[1]  # license_plate column
 
+            # Derive path from filename
+            image_path = processor.get_original_path(image_filename)
             images.append(image_path)
             image_alts.append(f"Fisker Ocean with plate {license_plate}")
 

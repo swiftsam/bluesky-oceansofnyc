@@ -300,21 +300,21 @@ def handle_incoming_sms(
                         print("✓ All data collected, saving sighting")
                         contributor_id = db.get_or_create_contributor(phone_number=from_number)
 
-                        # Generate unified filename
+                        # Generate unified filename and rename to final location
                         final_filename = processor.generate_filename(
                             validated_plate, image_timestamp
                         )
+                        processor.rename_to_final(image_path, final_filename)
 
                         result = db.add_sighting(
                             license_plate=validated_plate,
                             timestamp=sighting_time,
                             latitude=lat,
                             longitude=lon,
-                            image_path=image_path,
                             contributor_id=contributor_id,
+                            image_filename=final_filename,
                             borough=extracted_borough if not lat else None,
                             image_timestamp=image_timestamp,
-                            image_filename=final_filename,
                         )
 
                         if result is None:
@@ -414,20 +414,20 @@ def handle_incoming_sms(
             if image_timestamp is None:
                 image_timestamp = datetime.now()
 
-            # Generate unified filename
+            # Generate unified filename and rename to final location
             processor = ImageProcessor(volume_path=volume_path)
             final_filename = processor.generate_filename(plate, image_timestamp)
+            processor.rename_to_final(session_data["pending_image_path"], final_filename)
 
             result = db.add_sighting(
                 license_plate=plate,
                 timestamp=session_data["pending_timestamp"],
                 latitude=None,  # No GPS data
                 longitude=None,  # No GPS data
-                image_path=session_data["pending_image_path"],
                 contributor_id=contributor_id,
+                image_filename=final_filename,
                 borough=borough,
                 image_timestamp=image_timestamp,
-                image_filename=final_filename,
             )
 
             if result is None:
@@ -544,20 +544,20 @@ def handle_incoming_sms(
                 if image_timestamp is None:
                     image_timestamp = datetime.now()
 
-                # Generate unified filename
+                # Generate unified filename and rename to final location
                 processor = ImageProcessor(volume_path=volume_path)
                 final_filename = processor.generate_filename(plate, image_timestamp)
+                processor.rename_to_final(session_data["pending_image_path"], final_filename)
 
                 result = db.add_sighting(
                     license_plate=plate,
                     timestamp=session_data["pending_timestamp"],
                     latitude=session_data["pending_latitude"],
                     longitude=session_data["pending_longitude"],
-                    image_path=session_data["pending_image_path"],
                     contributor_id=contributor_id,
+                    image_filename=final_filename,
                     borough=final_borough if not has_gps else None,
                     image_timestamp=image_timestamp,
-                    image_filename=final_filename,
                 )
 
                 if result is None:
