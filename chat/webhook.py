@@ -208,7 +208,7 @@ def handle_incoming_sms(
 
                 # Process image: save original, create web version, upload to R2
                 image_paths = processor.process_sighting_image(
-                    image_data, temp_filename, upload_to_r2=True
+                    image_data, temp_filename, upload_to_r2=False
                 )
 
                 # Use original path for hash calculation
@@ -325,6 +325,7 @@ def handle_incoming_sms(
                             )
 
                         sighting_id = result["id"]
+                        processor.upload_web_version(final_filename)
                         print(f"✅ Sighting saved for plate {validated_plate} (ID: {sighting_id})")
 
                         if result["duplicate_type"] == "similar":
@@ -439,6 +440,7 @@ def handle_incoming_sms(
                 )
 
             sighting_id = result["id"]
+            processor.upload_web_version(final_filename)
             print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
 
             # Warn if similar image detected
@@ -568,6 +570,7 @@ def handle_incoming_sms(
                     )
 
                 sighting_id = result["id"]
+                processor.upload_web_version(final_filename)
                 print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
 
                 if result["duplicate_type"] == "similar":

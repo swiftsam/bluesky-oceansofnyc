@@ -413,12 +413,12 @@ def batch_process(images_dir: str, preview: bool):
 
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT image_path FROM sightings")
-        processed_paths = {Path(row[0]).name for row in cursor.fetchall()}
+        cursor.execute("SELECT image_filename FROM sightings")
+        processed_filenames = {row[0] for row in cursor.fetchall() if row[0]}
         conn.close()
 
         # Find unprocessed images
-        unprocessed = [img for img in all_images if img.name not in processed_paths]
+        unprocessed = [img for img in all_images if img.name not in processed_filenames]
 
         if not unprocessed:
             click.echo(f"✓ All images in {images_dir} have been processed!")
@@ -681,11 +681,11 @@ def batch_post(limit: int = None, preview: bool = False):
             click.echo("PREVIEW: Sightings that would be posted")
             click.echo(f"{'='*60}\n")
             for idx, sighting in enumerate(unposted, 1):
-                # Schema: id, license_plate, timestamp, latitude, longitude, image_path, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
+                # Schema: id, license_plate, timestamp, latitude, longitude, image_filename, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
                 sighting_id = sighting[0]
                 license_plate = sighting[1]
                 timestamp = sighting[2]
-                image_path = sighting[5]
+                image_filename = sighting[5]
                 # sighting[8] is contributor_id (not used here)
                 preferred_name = sighting[9]
                 bluesky_handle = sighting[10]
@@ -698,7 +698,7 @@ def batch_post(limit: int = None, preview: bool = False):
 
                 click.echo(f"{idx}. ID {sighting_id}: {license_plate}")
                 click.echo(f"   Date: {formatted_time}")
-                click.echo(f"   Image: {Path(image_path).name}")
+                click.echo(f"   Image: {image_filename}")
                 # Display contributor name
                 if preferred_name:
                     click.echo(f"   Contributor: {preferred_name}")
@@ -713,13 +713,13 @@ def batch_post(limit: int = None, preview: bool = False):
 
         for idx, sighting in enumerate(unposted, 1):
             # Unpack sighting data
-            # Schema: id, license_plate, timestamp, latitude, longitude, image_path, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
+            # Schema: id, license_plate, timestamp, latitude, longitude, image_filename, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
             sighting_id = sighting[0]
             license_plate = sighting[1]
             # timestamp = sighting[2]  # Not used in new format
             # latitude = sighting[3]  # Not used in new format
             # longitude = sighting[4]  # Not used in new format
-            image_path = sighting[5]
+            image_filename = sighting[5]
             # sighting[6] is created_at
             # sighting[7] is post_uri
             # sighting[8] is contributor_id (not used here)
@@ -756,7 +756,7 @@ def batch_post(limit: int = None, preview: bool = False):
             if contributor_id and contributor_id != 1:
                 click.echo(f"\n* {contributor_name} +1 → {total_count}")
             click.echo("\nImages:")
-            click.echo(f"  1. {image_path}")
+            click.echo(f"  1. {image_filename}")
             click.echo("=" * 60 + "\n")
 
             # Ask to post with default Yes
@@ -846,7 +846,7 @@ def multi_post(batch_size: int = 4, preview: bool = False):
         total_fiskers = db.get_tlc_vehicle_count()
 
         # Extract data for preview
-        # Sighting tuple: (id, license_plate, timestamp, lat, lon, image_path, created_at, post_uri,
+        # Sighting tuple: (id, license_plate, timestamp, lat, lon, image_filename, created_at, post_uri,
         #                  contributor_id, preferred_name, bluesky_handle, phone_number)
         plates = [s[1] for s in sightings_to_post]
 
@@ -895,9 +895,9 @@ def multi_post(batch_size: int = 4, preview: bool = False):
         # Show images
         click.echo("📸 Images:")
         for idx, sighting in enumerate(sightings_to_post, 1):
-            image_path = sighting[5]
+            image_filename = sighting[5]
             plate = sighting[1]
-            click.echo(f"   {idx}. {Path(image_path).name} ({plate})")
+            click.echo(f"   {idx}. {image_filename} ({plate})")
 
         click.echo(f"\n{'='*60}\n")
 

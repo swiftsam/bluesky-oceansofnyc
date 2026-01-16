@@ -21,15 +21,20 @@ class TestAddSighting:
     def test_add_sighting_basic(self, test_db_url, sample_contributor, temp_image):
         """Test adding a basic sighting without duplicates."""
         db = SightingsDatabase(test_db_url)
+        from utils.image_hashing import calculate_both_hashes
+
+        sha256, phash = calculate_both_hashes(str(temp_image))
 
         result = db.add_sighting(
             license_plate="T123456C",
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=str(temp_image),
+            image_filename="T123456C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
             borough="Manhattan",
+            image_hash_sha256=sha256,
+            image_hash_perceptual=phash,
         )
 
         assert result is not None
@@ -40,6 +45,9 @@ class TestAddSighting:
     def test_add_sighting_with_gps_auto_borough(self, test_db_url, sample_contributor, temp_image):
         """Test that borough is auto-populated from GPS coordinates."""
         db = SightingsDatabase(test_db_url)
+        from utils.image_hashing import calculate_both_hashes
+
+        sha256, phash = calculate_both_hashes(str(temp_image))
 
         # Times Square coordinates
         result = db.add_sighting(
@@ -47,8 +55,10 @@ class TestAddSighting:
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=str(temp_image),
+            image_filename="T234567C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
+            image_hash_sha256=sha256,
+            image_hash_perceptual=phash,
             # No borough provided - should auto-detect
         )
 
@@ -63,9 +73,9 @@ class TestAddSighting:
         """Test that exact duplicates (same SHA-256) are rejected."""
         db = SightingsDatabase(test_db_url)
 
-        from utils.image_hashing import calculate_sha256
+        from utils.image_hashing import calculate_both_hashes
 
-        sha256_hash = calculate_sha256(str(temp_image))
+        sha256, phash = calculate_both_hashes(str(temp_image))
 
         # Add first sighting
         result1 = db.add_sighting(
@@ -73,9 +83,10 @@ class TestAddSighting:
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=str(temp_image),
+            image_filename="T345678C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
-            image_hash_sha256=sha256_hash,
+            image_hash_sha256=sha256,
+            image_hash_perceptual=phash,
         )
         assert result1 is not None
 
@@ -85,9 +96,10 @@ class TestAddSighting:
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=f"{temp_image}_copy",  # Different path
+            image_filename="T345678C_20251206_184123_0001.jpg",  # Different filename
             contributor_id=sample_contributor,
-            image_hash_sha256=sha256_hash,  # Same hash
+            image_hash_sha256=sha256,  # Same hash
+            image_hash_perceptual=phash,
         )
 
         # Exact duplicates should be rejected (return None)
@@ -97,23 +109,26 @@ class TestAddSighting:
         """Test that similar images generate duplicate warnings."""
         db = SightingsDatabase(test_db_url)
 
-        from utils.image_hashing import calculate_perceptual_hash
+        from utils.image_hashing import calculate_both_hashes
+
+        sha256_1, phash1 = calculate_both_hashes(str(temp_images[0]))
 
         # Add first sighting with perceptual hash
-        phash1 = calculate_perceptual_hash(str(temp_images[0]))
         result1 = db.add_sighting(
             license_plate="T456789C",
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=str(temp_images[0]),
+            image_filename="T456789C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
+            image_hash_sha256=sha256_1,
             image_hash_perceptual=phash1,
         )
         assert result1 is not None
 
-        # Add second sighting with very similar hash
+        # Add second sighting with very similar perceptual hash
         # Modify just 1 bit to make it similar but not identical
+        sha256_2, phash2_orig = calculate_both_hashes(str(temp_images[1]))
         phash2_int = int(phash1, 16) ^ 0x1  # Flip last bit
         phash2 = format(phash2_int, "016x")
 
@@ -122,9 +137,10 @@ class TestAddSighting:
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=str(temp_images[1]),
+            image_filename="T567890C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
-            image_hash_perceptual=phash2,
+            image_hash_sha256=sha256_2,  # Different SHA256
+            image_hash_perceptual=phash2,  # Similar perceptual hash
         )
 
         # Similar images should be added but with warning
@@ -133,37 +149,12 @@ class TestAddSighting:
         assert result2["duplicate_info"] is not None
         assert result2["duplicate_info"]["distance"] <= 5
 
-    def test_add_sighting_unique_path_constraint(self, test_db_url, sample_contributor, temp_image):
-        """Test that duplicate image paths are rejected."""
-        db = SightingsDatabase(test_db_url)
-
-        # Add first sighting
-        result1 = db.add_sighting(
-            license_plate="T678901C",
-            timestamp=datetime.now().isoformat(),
-            latitude=40.7589,
-            longitude=-73.9851,
-            image_path=str(temp_image),
-            contributor_id=sample_contributor,
-        )
-        assert result1 is not None
-
-        # Try to add another sighting with same image path
-        result2 = db.add_sighting(
-            license_plate="T789012C",
-            timestamp=datetime.now().isoformat(),
-            latitude=40.7589,
-            longitude=-73.9851,
-            image_path=str(temp_image),  # Same path
-            contributor_id=sample_contributor,
-        )
-
-        # Should be rejected due to unique constraint on image_path
-        assert result2 is None
-
     def test_add_sighting_with_image_filename(self, test_db_url, sample_contributor, temp_image):
         """Test adding sighting with image filename."""
         db = SightingsDatabase(test_db_url)
+        from utils.image_hashing import calculate_both_hashes
+
+        sha256, phash = calculate_both_hashes(str(temp_image))
         image_timestamp = datetime.now()
 
         result = db.add_sighting(
@@ -171,10 +162,11 @@ class TestAddSighting:
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=str(temp_image),
+            image_filename="T890123C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
             image_timestamp=image_timestamp,
-            image_filename="T890123C_20251206_184123_0000.jpg",
+            image_hash_sha256=sha256,
+            image_hash_perceptual=phash,
         )
 
         assert result is not None
@@ -185,59 +177,48 @@ class TestAddSighting:
     def test_add_sighting_without_gps(self, test_db_url, sample_contributor, temp_image):
         """Test adding sighting without GPS coordinates."""
         db = SightingsDatabase(test_db_url)
+        from utils.image_hashing import calculate_both_hashes
+
+        sha256, phash = calculate_both_hashes(str(temp_image))
 
         result = db.add_sighting(
             license_plate="T901234C",
             timestamp=datetime.now().isoformat(),
             latitude=None,
             longitude=None,
-            image_path=str(temp_image),
+            image_filename="T901234C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
             borough="Brooklyn",  # Manually specified
+            image_hash_sha256=sha256,
+            image_hash_perceptual=phash,
         )
 
         assert result is not None
         sighting = db.get_sighting_by_id(result["id"])
         assert sighting[9] == "Brooklyn"
 
-    def test_add_sighting_hash_calculation(self, test_db_url, sample_contributor, temp_image):
-        """Test that hashes are automatically calculated if not provided."""
-        db = SightingsDatabase(test_db_url)
-
-        result = db.add_sighting(
-            license_plate="T012345C",
-            timestamp=datetime.now().isoformat(),
-            latitude=40.7589,
-            longitude=-73.9851,
-            image_path=str(temp_image),
-            contributor_id=sample_contributor,
-            # No hashes provided - should be calculated
-        )
-
-        assert result is not None
-        sighting = db.get_sighting_by_id(result["id"])
-        # Verify hashes were calculated (columns 7 and 8)
-        assert sighting[7] is not None  # SHA-256
-        assert sighting[8] is not None  # Perceptual hash
-
 
 @pytest.mark.db
 class TestSightingQueries:
     """Test sighting query methods."""
 
-    def test_get_sighting_count(self, test_db_url, sample_contributor, temp_image):
+    def test_get_sighting_count(self, test_db_url, sample_contributor, temp_images):
         """Test counting sightings for a plate."""
         db = SightingsDatabase(test_db_url)
+        from utils.image_hashing import calculate_both_hashes
 
         # Add multiple sightings for same plate
-        for i in range(3):
+        for i, img in enumerate(temp_images):
+            sha256, phash = calculate_both_hashes(str(img))
             db.add_sighting(
                 license_plate="T111111C",
                 timestamp=datetime.now().isoformat(),
                 latitude=40.7589,
                 longitude=-73.9851,
-                image_path=f"{temp_image}_{i}",
+                image_filename=f"T111111C_20251206_18412{i}_0000.jpg",
                 contributor_id=sample_contributor,
+                image_hash_sha256=sha256,
+                image_hash_perceptual=phash,
             )
 
         count = db.get_sighting_count("T111111C")
@@ -246,6 +227,9 @@ class TestSightingQueries:
     def test_get_unposted_sightings(self, test_db_url, sample_contributor, temp_image):
         """Test retrieving unposted sightings."""
         db = SightingsDatabase(test_db_url)
+        from utils.image_hashing import calculate_both_hashes
+
+        sha256, phash = calculate_both_hashes(str(temp_image))
 
         # Add sighting
         result = db.add_sighting(
@@ -253,8 +237,10 @@ class TestSightingQueries:
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=str(temp_image),
+            image_filename="T222222C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
+            image_hash_sha256=sha256,
+            image_hash_perceptual=phash,
         )
 
         # Get unposted sightings
@@ -268,6 +254,9 @@ class TestSightingQueries:
     def test_mark_as_posted(self, test_db_url, sample_contributor, temp_image):
         """Test marking a sighting as posted."""
         db = SightingsDatabase(test_db_url)
+        from utils.image_hashing import calculate_both_hashes
+
+        sha256, phash = calculate_both_hashes(str(temp_image))
 
         # Add sighting
         result = db.add_sighting(
@@ -275,8 +264,10 @@ class TestSightingQueries:
             timestamp=datetime.now().isoformat(),
             latitude=40.7589,
             longitude=-73.9851,
-            image_path=str(temp_image),
+            image_filename="T333333C_20251206_184123_0000.jpg",
             contributor_id=sample_contributor,
+            image_hash_sha256=sha256,
+            image_hash_perceptual=phash,
         )
 
         # Mark as posted

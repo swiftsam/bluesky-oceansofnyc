@@ -28,16 +28,17 @@ class TestWebSubmissionWebhook:
         result = mock_db.add_sighting(
             license_plate="T123456C",
             borough="Manhattan",
-            image_path="/modal/volume/test.jpg",
+            image_filename="T123456C_20251206_184123_0000.jpg",
             contributor_id=contributor_id,
             timestamp="2025-01-13T12:00:00",
             latitude=None,
             longitude=None,
-            sha256_hash=sha256_hash,
-            perceptual_hash=perceptual_hash,
+            image_hash_sha256=sha256_hash,
+            image_hash_perceptual=perceptual_hash,
         )
 
-        assert result["is_duplicate"] is False
+        assert result is not None
+        assert result["id"] is not None
         assert mock_db.get_sighting_count() == 1
 
     def test_duplicate_submission_rejected(self, mock_db, temp_image):
@@ -52,29 +53,30 @@ class TestWebSubmissionWebhook:
         result1 = mock_db.add_sighting(
             license_plate="T123456C",
             borough="Manhattan",
-            image_path="/modal/volume/test1.jpg",
+            image_filename="T123456C_20251206_184123_0000.jpg",
             contributor_id=contributor_id,
             timestamp="2025-01-13T12:00:00",
             latitude=None,
             longitude=None,
-            sha256_hash=sha256_hash,
+            image_hash_sha256=sha256_hash,
         )
-        assert result1["is_duplicate"] is False
+        assert result1 is not None
+        assert result1["id"] is not None
 
         # Try duplicate
         result2 = mock_db.add_sighting(
             license_plate="T123456C",
             borough="Manhattan",
-            image_path="/modal/volume/test2.jpg",
+            image_filename="T123456C_20251206_184123_0001.jpg",
             contributor_id=contributor_id,
             timestamp="2025-01-13T12:01:00",
             latitude=None,
             longitude=None,
-            sha256_hash=sha256_hash,
+            image_hash_sha256=sha256_hash,
         )
 
-        # Should be detected as duplicate
-        assert result2["is_duplicate"] is True
+        # Should be detected as duplicate (returns None)
+        assert result2 is None
 
     def test_r2_upload_on_submission(self, mock_r2, temp_image):
         """Test that images are uploaded to R2 on submission."""
@@ -178,17 +180,20 @@ class TestSMSWebhookFlow:
         result = mock_db.add_sighting(
             license_plate="T234567C",
             borough="Brooklyn",
-            image_path="/tmp/image.jpg",
+            image_filename="T234567C_20251206_184123_0000.jpg",
             contributor_id=contributor_id,
             timestamp="2025-01-13T12:00:00",
             latitude=None,
             longitude=None,
+            image_hash_sha256="abc123" * 10 + "abcd",  # Dummy hash
+            image_hash_perceptual="deadbeef" * 2,  # Dummy hash
         )
 
         # Reset session
         mock_db.delete_chat_session(phone)
 
-        assert result["is_duplicate"] is False
+        assert result is not None
+        assert result["id"] is not None
         assert mock_db.get_chat_session(phone) is None
 
     def test_image_with_gps_extracts_coordinates(self):

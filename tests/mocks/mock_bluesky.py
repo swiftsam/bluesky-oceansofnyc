@@ -106,8 +106,10 @@ class MockBlueskyClient:
         # Mock image uploads
         images = []
         for sighting in sightings:
-            if "image_path" in sighting:
-                images.append(self.upload_image(sighting["image_path"], "Fisker Ocean sighting"))
+            if "image_filename" in sighting:
+                images.append(
+                    self.upload_image(sighting["image_filename"], "Fisker Ocean sighting")
+                )
 
         return self.create_post(text, images, dry_run=False)
 

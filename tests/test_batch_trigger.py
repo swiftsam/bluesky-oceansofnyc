@@ -6,7 +6,12 @@ from post.batch_trigger import get_batch_post_stats, should_trigger_batch_post
 
 
 def create_mock_sighting(hours_ago: float = 0) -> tuple:
-    """Create a mock sighting tuple for testing."""
+    """Create a mock sighting tuple for testing.
+
+    Schema matches get_unposted_sightings() return format:
+    (id, license_plate, timestamp, latitude, longitude, image_filename, created_at, post_uri,
+     contributor_id, preferred_name, bluesky_handle, phone_number)
+    """
     created_at = (datetime.now() - timedelta(hours=hours_ago)).isoformat()
     return (
         1,  # id
@@ -14,7 +19,7 @@ def create_mock_sighting(hours_ago: float = 0) -> tuple:
         created_at,  # timestamp
         None,  # latitude
         None,  # longitude
-        "/path/to/image.jpg",  # image_path
+        "T123456C_20251206_184123_0000.jpg",  # image_filename
         created_at,  # created_at (index 6)
         None,  # post_uri
         1,  # contributor_id

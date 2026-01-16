@@ -37,7 +37,7 @@ class MockSightingsDatabase:
         plate_number: str | None = None,
         license_plate: str | None = None,
         borough: str | None = None,
-        image_path: str | None = None,
+        image_filename: str | None = None,
         phone_number: str | None = None,
         contributor_id: int | None = None,
         gps_latitude: float | None = None,
@@ -47,44 +47,39 @@ class MockSightingsDatabase:
         timestamp: str | None = None,
         sha256_hash: str | None = None,
         perceptual_hash: str | None = None,
-        r2_url: str | None = None,
-        r2_url_web: str | None = None,
-    ) -> dict:
+        image_hash_sha256: str | None = None,
+        image_hash_perceptual: str | None = None,
+        image_timestamp: datetime | None = None,
+    ) -> dict | None:
         """Mock add sighting with duplicate detection."""
         # Support both parameter names
         plate = license_plate if license_plate else plate_number
         lat = latitude if latitude is not None else gps_latitude
         lon = longitude if longitude is not None else gps_longitude
+        sha256 = image_hash_sha256 or sha256_hash
+        phash = image_hash_perceptual or perceptual_hash
 
         # Check for exact duplicate (SHA256)
-        if sha256_hash:
+        if sha256:
             for sighting in self.sightings:
-                if sighting.get("image_hash_sha256") == sha256_hash:
-                    return {
-                        "is_duplicate": True,
-                        "duplicate_type": "exact",
-                        "existing_sighting_id": sighting["id"],
-                        "sighting_id": None,
-                    }
+                if sighting.get("image_hash_sha256") == sha256:
+                    return None  # Match real implementation - return None for duplicates
 
         # Check for similar duplicate (perceptual hash within threshold)
-        if perceptual_hash:
+        similar_match = None
+        if phash:
             from utils.image_hashing import hamming_distance
 
             for sighting in self.sightings:
                 if sighting.get("image_hash_perceptual"):
                     try:
-                        distance = hamming_distance(
-                            perceptual_hash, sighting["image_hash_perceptual"]
-                        )
+                        distance = hamming_distance(phash, sighting["image_hash_perceptual"])
                         if distance <= 5:  # Threshold
-                            return {
-                                "is_duplicate": True,
-                                "duplicate_type": "similar",
-                                "existing_sighting_id": sighting["id"],
-                                "sighting_id": None,
-                                "hamming_distance": distance,
+                            similar_match = {
+                                "sighting_id": sighting["id"],
+                                "distance": distance,
                             }
+                            break
                     except ValueError:
                         pass
 
@@ -96,25 +91,32 @@ class MockSightingsDatabase:
             "id": sighting_id,
             "license_plate": plate,
             "borough": borough,
-            "image_path": image_path,
+            "image_filename": image_filename,
             "phone_number": phone_number,
             "contributor_id": contributor_id,
-            "gps_latitude": lat,
-            "gps_longitude": lon,
-            "image_hash_sha256": sha256_hash,
-            "image_hash_perceptual": perceptual_hash,
-            "r2_url": r2_url,
-            "r2_url_web": r2_url_web,
+            "latitude": lat,
+            "longitude": lon,
+            "image_hash_sha256": sha256,
+            "image_hash_perceptual": phash,
+            "image_timestamp": image_timestamp,
             "created_at": datetime.now(),
             "posted": False,
         }
 
         self.sightings.append(sighting)
 
-        return {
-            "is_duplicate": False,
-            "sighting_id": sighting_id,
+        # Match real implementation return format
+        result: dict = {
+            "id": sighting_id,
+            "duplicate_type": None,
+            "duplicate_info": None,
         }
+
+        if similar_match:
+            result["duplicate_type"] = "similar"
+            result["duplicate_info"] = similar_match
+
+        return result
 
     def get_sighting(self, sighting_id: int) -> dict | None:
         """Get a sighting by ID."""

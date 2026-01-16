@@ -760,6 +760,7 @@ def backfill_image_hashes(batch_size: int = 100, dry_run: bool = False):
 
     from database import SightingsDatabase
     from utils.image_hashing import ImageHashError, calculate_both_hashes
+    from utils.image_processor import ImageProcessor
 
     print("🔄 Starting image hash backfill on Modal...")
     print(f"   Batch size: {batch_size}")
@@ -771,10 +772,13 @@ def backfill_image_hashes(batch_size: int = 100, dry_run: bool = False):
     conn = db._get_connection()
     cursor = conn.cursor()
 
+    # Initialize image processor to derive paths from filenames
+    processor = ImageProcessor(volume_path=VOLUME_PATH)
+
     # Get all sightings without hashes
     cursor.execute(
         """
-        SELECT id, image_path
+        SELECT id, image_filename
         FROM sightings
         WHERE image_hash_sha256 IS NULL OR image_hash_perceptual IS NULL
         ORDER BY id ASC
@@ -796,14 +800,17 @@ def backfill_image_hashes(batch_size: int = 100, dry_run: bool = False):
     skipped = 0
     failed = []
 
-    for sighting_id, image_path in sightings:
+    for sighting_id, image_filename in sightings:
         processed += 1
+
+        # Derive full path from filename
+        image_path = processor.get_original_path(image_filename)
 
         # Check if file exists
         if not os.path.exists(image_path):
             print(f"⚠️  Sighting #{sighting_id}: Image file not found: {image_path}")
             skipped += 1
-            failed.append((sighting_id, image_path, "File not found"))
+            failed.append((sighting_id, image_filename, "File not found"))
             continue
 
         try:
@@ -838,12 +845,12 @@ def backfill_image_hashes(batch_size: int = 100, dry_run: bool = False):
 
         except ImageHashError as e:
             print(f"❌ Sighting #{sighting_id}: Failed to calculate hashes: {e}")
-            failed.append((sighting_id, image_path, str(e)))
+            failed.append((sighting_id, image_filename, str(e)))
             continue
 
         except Exception as e:
             print(f"❌ Sighting #{sighting_id}: Unexpected error: {e}")
-            failed.append((sighting_id, image_path, str(e)))
+            failed.append((sighting_id, image_filename, str(e)))
             continue
 
     # Final commit
@@ -867,12 +874,12 @@ def backfill_image_hashes(batch_size: int = 100, dry_run: bool = False):
 
     if failed and len(failed) <= 10:
         print("\nFailed sightings:")
-        for sighting_id, image_path, error in failed:
+        for sighting_id, image_filename, error in failed:
             print(f"  #{sighting_id}: {error}")
-            print(f"    Path: {image_path}")
+            print(f"    Filename: {image_filename}")
     elif failed:
         print(f"\n{len(failed)} sightings failed (showing first 10):")
-        for sighting_id, _image_path, error in failed[:10]:
+        for sighting_id, _image_filename, error in failed[:10]:
             print(f"  #{sighting_id}: {error}")
 
     if dry_run:
@@ -919,366 +926,36 @@ def generate_web_data():
 @app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume}, timeout=3600)
 def backfill_r2_images(batch_size: int = 10, dry_run: bool = False):
     """
-    Backfill existing images to Cloudflare R2 and update database with unified filenames.
+    DEPRECATED: This migration function is no longer needed.
 
-    This function:
-    1. Finds all sightings without image_filename
-    2. Creates web-optimized versions and uploads to R2
-    3. Updates database with image_filename
-
-    Args:
-        batch_size: Number of images to process before committing (default: 10)
-        dry_run: If True, show what would be done without uploading or updating database
+    The image_path column has been dropped. All new sightings now use
+    image_filename directly. This function remains for reference only.
     """
-    import os
-
-    from database import SightingsDatabase
-    from utils.image_processor import ImageProcessor
-    from utils.r2_storage import R2Storage
-
-    print("🔄 Starting R2 backfill on Modal...")
-    print(f"   Batch size: {batch_size}")
-    if dry_run:
-        print("   DRY RUN MODE - no uploads or changes will be made")
-    print()
-
-    db = SightingsDatabase()
-    conn = db._get_connection()
-    cursor = conn.cursor()
-
-    # Get all sightings without image_filename (indicating they haven't been migrated)
-    cursor.execute(
-        """
-        SELECT id, image_path
-        FROM sightings
-        WHERE image_filename IS NULL
-        ORDER BY id ASC
-        """
-    )
-
-    sightings = cursor.fetchall()
-    total = len(sightings)
-
-    if total == 0:
-        print("✓ All sightings already migrated!")
-        conn.close()
-        return {"status": "complete", "processed": 0, "successful": 0, "skipped": 0}
-
-    print(f"Found {total} sightings to process\n")
-
-    # Initialize processors
-    processor = ImageProcessor(volume_path=VOLUME_PATH)
-    r2: R2Storage | None
-    if not dry_run:
-        r2 = R2Storage()
-    else:
-        r2 = None
-
-    processed = 0
-    successful = 0
-    skipped = 0
-    failed = []
-
-    for sighting_id, image_path in sightings:
-        processed += 1
-
-        source_path = image_path
-
-        if not source_path:
-            print(f"⚠️  Sighting #{sighting_id}: No image path found")
-            skipped += 1
-            failed.append((sighting_id, None, "No image path"))
-            continue
-
-        # Check if file exists
-        if not os.path.exists(source_path):
-            print(f"⚠️  Sighting #{sighting_id}: Image file not found: {source_path}")
-            skipped += 1
-            failed.append((sighting_id, source_path, "File not found"))
-            continue
-
-        try:
-            # Extract filename for R2 key
-            from pathlib import Path
-
-            filename = Path(source_path).name
-            # Replace extension with .jpg for web version
-            web_filename = Path(filename).stem + "_web.jpg"
-            r2_key = f"sightings/{web_filename}"
-
-            # Create web-optimized version
-            web_bytes, _ = processor.create_web_version(source_path)
-
-            if dry_run:
-                print(
-                    f"[DRY RUN] Would upload sighting #{sighting_id}: "
-                    f"{len(web_bytes)} bytes → {r2_key}"
-                )
-                successful += 1
-            elif r2 is not None:
-                # Upload to R2
-                web_url = r2.upload_bytes(web_bytes, r2_key, content_type="image/jpeg")
-
-                # Update database with image_filename
-                cursor.execute(
-                    """
-                    UPDATE sightings
-                    SET image_filename = %s
-                    WHERE id = %s
-                    """,
-                    (web_filename, sighting_id),
-                )
-
-                print(f"✓ Sighting #{sighting_id}: Uploaded to {web_url}")
-                successful += 1
-
-                # Commit in batches
-                if successful % batch_size == 0:
-                    conn.commit()
-                    print(
-                        f"✓ Committed batch of {batch_size} updates (total: {successful}/{total})"
-                    )
-
-        except Exception as e:
-            print(f"❌ Sighting #{sighting_id}: Failed: {e}")
-            failed.append((sighting_id, source_path, str(e)))
-            continue
-
-    # Final commit
-    if not dry_run and successful > 0:
-        conn.commit()
-        print("\n✓ Final commit completed")
-
-    # Commit volume changes
-    volume.commit()
-
-    conn.close()
-
-    # Summary
-    print("\n" + "=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
-    print(f"Total sightings processed: {processed}")
-    print(f"Successfully uploaded:      {successful}")
-    print(f"Skipped (no file):         {skipped}")
-    print(f"Failed:                    {len(failed)}")
-
-    if failed and len(failed) <= 10:
-        print("\nFailed sightings:")
-        for sighting_id, image_path, error in failed:
-            print(f"  #{sighting_id}: {error}")
-            if image_path:
-                print(f"    Path: {image_path}")
-    elif failed:
-        print(f"\n{len(failed)} sightings failed (showing first 10):")
-        for sighting_id, _image_path, error in failed[:10]:
-            print(f"  #{sighting_id}: {error}")
-
-    if dry_run:
-        print("\n⚠️  DRY RUN - no uploads or changes were made")
-    else:
-        print(f"\n✅ Backfill complete! Uploaded {successful}/{total} images to R2")
-
+    print("⚠️  backfill_r2_images() is DEPRECATED")
+    print("   The image_path column has been dropped.")
+    print("   All sightings now use image_filename directly.")
+    print("   This migration function is no longer needed.")
     return {
-        "status": "complete",
-        "processed": processed,
-        "successful": successful,
-        "skipped": skipped,
-        "failed": len(failed),
-        "dry_run": dry_run,
+        "status": "deprecated",
+        "message": "Migration complete - image_path column no longer exists",
     }
 
 
 @app.function(image=image, secrets=secrets, volumes={VOLUME_PATH: volume}, timeout=3600)
 def migrate_image_storage(batch_size: int = 50, dry_run: bool = True):
     """
-    Migrate existing sightings to new image storage format.
+    DEPRECATED: This migration function is no longer needed.
 
-    This function:
-    1. Finds all sightings without image_filename
-    2. Extracts EXIF timestamp from original image (or uses created_at)
-    3. Generates new filename: {plate}_{yyyymmdd_hhmmss_ssss}.jpg
-    4. Copies files to new paths in Modal volume
-    5. Uploads web version to R2 with new key
-    6. Updates database with image_timestamp and image_filename
-
-    Args:
-        batch_size: Number of images to process before committing (default: 50)
-        dry_run: If True, show what would be done without making changes (default: True)
+    The image_path column has been dropped. All new sightings now use
+    image_filename directly. This function remains for reference only.
     """
-    import os
-    import shutil
-    from datetime import datetime
-
-    from database import SightingsDatabase
-    from geolocate.exif import extract_image_timestamp
-    from utils.image_processor import ImageProcessor
-    from utils.r2_storage import R2Storage
-
-    print("🔄 Starting image storage migration on Modal...")
-    print(f"   Batch size: {batch_size}")
-    if dry_run:
-        print("   DRY RUN MODE - no changes will be made")
-    print()
-
-    db = SightingsDatabase()
-    conn = db._get_connection()
-    cursor = conn.cursor()
-
-    # Get all sightings without image_filename
-    cursor.execute(
-        """
-        SELECT id, license_plate, image_path, created_at
-        FROM sightings
-        WHERE image_filename IS NULL
-        ORDER BY id ASC
-        """
-    )
-
-    sightings = cursor.fetchall()
-    total = len(sightings)
-
-    if total == 0:
-        print("✓ All sightings already have image_filename!")
-        conn.close()
-        return {"status": "complete", "processed": 0, "successful": 0, "skipped": 0}
-
-    print(f"Found {total} sightings to migrate\n")
-
-    # Initialize processors
-    processor = ImageProcessor(volume_path=VOLUME_PATH)
-    r2: R2Storage | None = None if dry_run else R2Storage()
-
-    processed = 0
-    successful = 0
-    skipped = 0
-    failed = []
-
-    for sighting_id, license_plate, image_path, created_at in sightings:
-        processed += 1
-
-        source_path = image_path
-
-        if not source_path:
-            print(f"⚠️  Sighting #{sighting_id}: No image path found")
-            skipped += 1
-            failed.append((sighting_id, None, "No image path"))
-            continue
-
-        # Check if file exists
-        if not os.path.exists(source_path):
-            print(f"⚠️  Sighting #{sighting_id}: Image file not found: {source_path}")
-            skipped += 1
-            failed.append((sighting_id, source_path, "File not found"))
-            continue
-
-        try:
-            # Extract EXIF timestamp, fallback to created_at
-            image_timestamp = extract_image_timestamp(source_path)
-            if image_timestamp is None:
-                if isinstance(created_at, str):
-                    image_timestamp = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                elif created_at:
-                    image_timestamp = created_at
-                else:
-                    image_timestamp = datetime.now()
-
-            # Generate new filename
-            new_filename = processor.generate_filename(license_plate, image_timestamp)
-
-            # New paths
-            new_original_path = f"{processor.originals_path}/{new_filename}"
-            new_web_path = f"{processor.web_path}/{new_filename}"
-            r2_key = f"sightings/{new_filename}"
-
-            if dry_run:
-                print(f"[DRY RUN] Sighting #{sighting_id}: {license_plate}")
-                print(f"  Source: {source_path}")
-                print(f"  New filename: {new_filename}")
-                print(f"  Timestamp: {image_timestamp}")
-                successful += 1
-            else:
-                # Copy to new original path
-                os.makedirs(os.path.dirname(new_original_path), exist_ok=True)
-                shutil.copy2(source_path, new_original_path)
-
-                # Create and save web version
-                web_bytes, _ = processor.create_web_version(new_original_path)
-                os.makedirs(os.path.dirname(new_web_path), exist_ok=True)
-                with open(new_web_path, "wb") as f:
-                    f.write(web_bytes)
-
-                # Upload to R2
-                if r2 is not None:
-                    r2.upload_bytes(web_bytes, r2_key, content_type="image/jpeg")
-
-                # Update database
-                cursor.execute(
-                    """
-                    UPDATE sightings
-                    SET image_timestamp = %s, image_filename = %s
-                    WHERE id = %s
-                    """,
-                    (image_timestamp, new_filename, sighting_id),
-                )
-
-                print(f"✓ Sighting #{sighting_id}: {new_filename}")
-                successful += 1
-
-                # Commit in batches
-                if successful % batch_size == 0:
-                    conn.commit()
-                    volume.commit()
-                    print(f"✓ Committed batch (total: {successful}/{total})")
-
-        except Exception as e:
-            print(f"❌ Sighting #{sighting_id}: Failed: {e}")
-            import traceback
-
-            traceback.print_exc()
-            failed.append((sighting_id, source_path, str(e)))
-            continue
-
-    # Final commit
-    if not dry_run and successful > 0:
-        conn.commit()
-        volume.commit()
-        print("\n✓ Final commit completed")
-
-    conn.close()
-
-    # Summary
-    print("\n" + "=" * 60)
-    print("MIGRATION SUMMARY")
-    print("=" * 60)
-    print(f"Total sightings processed: {processed}")
-    print(f"Successfully migrated:     {successful}")
-    print(f"Skipped (no file):         {skipped}")
-    print(f"Failed:                    {len(failed)}")
-
-    if failed and len(failed) <= 10:
-        print("\nFailed sightings:")
-        for sighting_id, image_path, error in failed:
-            print(f"  #{sighting_id}: {error}")
-            if image_path:
-                print(f"    Path: {image_path}")
-    elif failed:
-        print(f"\n{len(failed)} sightings failed (showing first 10):")
-        for sighting_id, _image_path, error in failed[:10]:
-            print(f"  #{sighting_id}: {error}")
-
-    if dry_run:
-        print("\n⚠️  DRY RUN - no changes were made")
-    else:
-        print(f"\n✅ Migration complete! Migrated {successful}/{total} sightings")
-
+    print("⚠️  migrate_image_storage() is DEPRECATED")
+    print("   The image_path column has been dropped.")
+    print("   All sightings now use image_filename directly.")
+    print("   This migration function is no longer needed.")
     return {
-        "status": "complete",
-        "processed": processed,
-        "successful": successful,
-        "skipped": skipped,
-        "failed": len(failed),
-        "dry_run": dry_run,
+        "status": "deprecated",
+        "message": "Migration complete - image_path column no longer exists",
     }
 
 

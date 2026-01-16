@@ -143,7 +143,7 @@ class ImageProcessor:
         Returns:
             Tuple of (image_bytes, filename)
         """
-        img = Image.open(original_path)
+        img: Image.Image = Image.open(original_path).copy()
 
         # Convert RGBA to RGB if necessary
         if img.mode == "RGBA":
@@ -183,7 +183,7 @@ class ImageProcessor:
         Returns:
             Tuple of (processed_image_bytes, generic_filename)
         """
-        img = Image.open(io.BytesIO(image_bytes))
+        img: Image.Image = Image.open(io.BytesIO(image_bytes)).copy()
 
         # Convert RGBA to RGB if necessary
         if img.mode == "RGBA":
@@ -202,7 +202,8 @@ class ImageProcessor:
         img.save(buffer, format="JPEG", quality=quality, optimize=True)
         processed_bytes = buffer.getvalue()
 
-        return processed_bytes, "web_image.jpg"
+        web_filename = "web_image.jpg"
+        return processed_bytes, web_filename
 
     def save_web_version_local(self, web_bytes: bytes, filename: str) -> str:
         """
@@ -221,6 +222,46 @@ class ImageProcessor:
             f.write(web_bytes)
 
         return web_path
+
+    def get_web_path(self, filename: str) -> str:
+        """
+        Derive full path to web image from filename.
+
+        Args:
+            filename: Image filename (e.g., "T680368C_20251206_184123_2345.jpg")
+
+        Returns:
+            Full path (e.g., "/data/sightings/web/T680368C_20251206_184123_2345.jpg")
+        """
+        return f"{self.web_path}/{filename}"
+
+    def upload_web_version(self, filename: str, r2_folder: str = "sightings") -> str | None:
+        """
+        Upload the local web version to R2 using the final filename.
+
+        Args:
+            filename: Final image filename
+            r2_folder: Folder path in R2 bucket
+
+        Returns:
+            Public URL if uploaded, otherwise None
+        """
+        web_path = self.get_web_path(filename)
+        if not os.path.exists(web_path):
+            print(f"⚠ Web file not found for upload: {web_path}")
+            return None
+
+        try:
+            from utils.r2_storage import R2Storage
+
+            r2 = R2Storage()
+            object_key = f"{r2_folder}/{filename}"
+            web_url = r2.upload_file(web_path, object_key, content_type="image/jpeg")
+            print(f"✓ Uploaded to R2: {web_url}")
+            return web_url
+        except Exception as e:
+            print(f"⚠ R2 upload failed: {e}")
+            return None
 
     def process_sighting_image(
         self,
