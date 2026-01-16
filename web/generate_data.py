@@ -4,6 +4,7 @@
 import json
 import os
 import sys
+from datetime import datetime
 
 # Add parent directory to path to import database models
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -118,7 +119,14 @@ def generate_vehicle_data(upload_to_r2: bool = False) -> dict:
         "total": len(vehicles),
         "sighted": sum(1 for v in vehicles if v["image"]),
     }
-    json_content = json.dumps(data, indent=2)
+
+    def json_serializer(obj):
+        """Custom JSON serializer for datetime objects."""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+    json_content = json.dumps(data, indent=2, default=json_serializer)
 
     if upload_to_r2:
         # Upload to R2 with short cache time (60 seconds)
