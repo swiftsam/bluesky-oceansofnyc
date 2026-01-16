@@ -169,7 +169,7 @@ def find_similar_images(
                   Lower = stricter matching. Recommended: 5-10
 
     Returns:
-        List of dicts with keys: id, image_path, created_at, image_hash_perceptual, distance
+        List of dicts with keys: id, image_filename, created_at, image_hash_perceptual, distance
         Sorted by distance (most similar first)
 
     Example:
@@ -177,14 +177,14 @@ def find_similar_images(
         >>> similar = find_similar_images(conn, "abc123...", threshold=5)
         >>> if similar:
         ...     print(f"Found {len(similar)} similar images")
-        ...     print(f"Most similar: {similar[0]['image_path']} (distance: {similar[0]['distance']})")
+        ...     print(f"Most similar: {similar[0]['image_filename']} (distance: {similar[0]['distance']})")
     """
     cursor = db_connection.cursor()
 
     # Get all sightings with perceptual hashes
     cursor.execute(
         """
-        SELECT id, image_path, created_at, image_hash_perceptual
+        SELECT id, image_filename, created_at, image_hash_perceptual
         FROM sightings
         WHERE image_hash_perceptual IS NOT NULL
         """
@@ -192,14 +192,14 @@ def find_similar_images(
 
     results = []
     for row in cursor.fetchall():
-        sighting_id, image_path, created_at, db_hash = row
+        sighting_id, image_filename, created_at, db_hash = row
         try:
             distance = hamming_distance(perceptual_hash, db_hash)
             if distance <= threshold:
                 results.append(
                     {
                         "id": sighting_id,
-                        "image_path": image_path,
+                        "image_filename": image_filename,
                         "created_at": created_at,
                         "image_hash_perceptual": db_hash,
                         "distance": distance,
@@ -224,7 +224,7 @@ def check_exact_duplicate(db_connection, sha256_hash: str) -> dict | None:
 
     Returns:
         Dict with sighting info if found, None otherwise
-        Keys: id, image_path, created_at, license_plate
+        Keys: id, image_filename, created_at, license_plate
 
     Example:
         >>> conn = psycopg2.connect(DATABASE_URL)
@@ -237,7 +237,7 @@ def check_exact_duplicate(db_connection, sha256_hash: str) -> dict | None:
 
     cursor.execute(
         """
-        SELECT id, image_path, created_at, license_plate
+        SELECT id, image_filename, created_at, license_plate
         FROM sightings
         WHERE image_hash_sha256 = %s
         LIMIT 1
@@ -249,7 +249,7 @@ def check_exact_duplicate(db_connection, sha256_hash: str) -> dict | None:
     if row:
         return {
             "id": row[0],
-            "image_path": row[1],
+            "image_filename": row[1],
             "created_at": row[2],
             "license_plate": row[3],
         }
