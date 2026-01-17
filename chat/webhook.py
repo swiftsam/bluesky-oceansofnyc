@@ -75,7 +75,11 @@ def spawn_background_processing(
         from_number: The contributor's phone number
     """
     try:
-        from modal_app import process_sighting_background
+        from modal_app import process_sighting_background, volume
+
+        # Commit volume changes before spawning so background task can see the files
+        volume.commit()
+        print("✓ Volume committed")
 
         process_sighting_background.spawn(
             image_filename=image_filename,

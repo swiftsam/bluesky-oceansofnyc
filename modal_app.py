@@ -94,8 +94,11 @@ def process_sighting_background(
     # 1. Upload web version to R2
     try:
         processor = ImageProcessor(volume_path=VOLUME_PATH)
-        processor.upload_web_version(image_filename)
-        print(f"✓ Uploaded to R2: {image_filename}")
+        r2_url = processor.upload_web_version(image_filename)
+        if r2_url:
+            print(f"✓ Uploaded to R2: {r2_url}")
+        else:
+            print("⚠️ Web version upload skipped (file not found)")
     except Exception as e:
         print(f"⚠️ Failed to upload to R2: {e}")
 
