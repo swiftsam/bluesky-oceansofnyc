@@ -541,6 +541,14 @@
                     </select>
                 </div>
 
+                <div class="filter-group">
+                    <label class="filter-label">Sort by</label>
+                    <select class="filter-select" id="sortBy">
+                        <option value="plate">License Plate</option>
+                        <option value="recent">Most Recently Sighted</option>
+                    </select>
+                </div>
+
                 <div class="filter-results" id="filterResults"></div>
             </div>
 
@@ -875,6 +883,55 @@
             document.getElementById('filterResults').textContent = resultsText;
         }
 
+        // Sort function
+        function applySort() {
+            const sortBy = document.getElementById('sortBy').value;
+            const grid = document.getElementById('grid');
+            const stats = document.getElementById('stats');
+
+            // Create array of {vehicle, tile} pairs for sorting
+            const pairs = allVehicles.map((vehicle, index) => ({
+                vehicle,
+                tile: allTiles[index]
+            }));
+
+            // Sort based on selected option
+            if (sortBy === 'recent') {
+                pairs.sort((a, b) => {
+                    // Get most recent sighting timestamp for each vehicle
+                    const aTimestamp = a.vehicle.sightings?.reduce((max, s) => {
+                        const ts = new Date(s.timestamp).getTime();
+                        return ts > max ? ts : max;
+                    }, 0) || 0;
+                    const bTimestamp = b.vehicle.sightings?.reduce((max, s) => {
+                        const ts = new Date(s.timestamp).getTime();
+                        return ts > max ? ts : max;
+                    }, 0) || 0;
+
+                    // Sort descending (most recent first), unsighted at the end
+                    if (aTimestamp === 0 && bTimestamp === 0) {
+                        return a.vehicle.plate.localeCompare(b.vehicle.plate);
+                    }
+                    if (aTimestamp === 0) return 1;
+                    if (bTimestamp === 0) return -1;
+                    return bTimestamp - aTimestamp;
+                });
+            } else {
+                // Default: sort by plate
+                pairs.sort((a, b) => a.vehicle.plate.localeCompare(b.vehicle.plate));
+            }
+
+            // Update arrays to match new order
+            allVehicles = pairs.map(p => p.vehicle);
+            allTiles = pairs.map(p => p.tile);
+
+            // Reorder DOM elements
+            allTiles.forEach(tile => grid.appendChild(tile));
+
+            // Re-apply filters to update visibility
+            applyFilters();
+        }
+
         // Load and render vehicle data (revalidate cache with server)
         fetch("https://cdn.oceansofnyc.com/web/vehicles.json", { cache: "no-cache" })
             .then(response => response.json())
@@ -923,6 +980,7 @@
                 document.getElementById('filterStatus').addEventListener('change', applyFilters);
                 document.getElementById('filterContributor').addEventListener('change', applyFilters);
                 document.getElementById('filterBorough').addEventListener('change', applyFilters);
+                document.getElementById('sortBy').addEventListener('change', applySort);
 
                 // Render tiles
                 const grid = document.getElementById('grid');
