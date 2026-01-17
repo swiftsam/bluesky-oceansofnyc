@@ -522,6 +522,7 @@
                     <select class="filter-select" id="filterStatus">
                         <option value="all">All</option>
                         <option value="sighted">Sighted</option>
+                        <option value="multiple">Multiple Sightings</option>
                         <option value="not-sighted">Not Yet Sighted</option>
                     </select>
                 </div>
@@ -838,9 +839,12 @@
                 let show = true;
 
                 // Status filter
-                if (statusFilter === 'sighted' && !vehicle.image) {
+                const sightingCount = vehicle.sightings?.length || 0;
+                if (statusFilter === 'sighted' && sightingCount === 0) {
                     show = false;
-                } else if (statusFilter === 'not-sighted' && vehicle.image) {
+                } else if (statusFilter === 'multiple' && sightingCount <= 1) {
+                    show = false;
+                } else if (statusFilter === 'not-sighted' && sightingCount > 0) {
                     show = false;
                 }
 
