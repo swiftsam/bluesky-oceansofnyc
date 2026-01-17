@@ -9,8 +9,8 @@ def create_mock_sighting(hours_ago: float = 0) -> tuple:
     """Create a mock sighting tuple for testing.
 
     Schema matches get_unposted_sightings() return format:
-    (id, license_plate, timestamp, latitude, longitude, image_filename, created_at, post_uri,
-     contributor_id, preferred_name, bluesky_handle, phone_number)
+    (id, license_plate, timestamp, latitude, longitude, image_filename, borough, created_at,
+     post_uri, contributor_id, preferred_name, bluesky_handle, phone_number)
     """
     created_at = (datetime.now() - timedelta(hours=hours_ago)).isoformat()
     return (
@@ -20,7 +20,8 @@ def create_mock_sighting(hours_ago: float = 0) -> tuple:
         None,  # latitude
         None,  # longitude
         "T123456C_20251206_184123_0000.jpg",  # image_filename
-        created_at,  # created_at (index 6)
+        "Manhattan",  # borough (index 6)
+        created_at,  # created_at (index 7)
         None,  # post_uri
         1,  # contributor_id
         "Test User",  # preferred_name
@@ -81,7 +82,7 @@ class TestShouldTriggerBatchPost:
         # Create a sighting with datetime object instead of string
         created_at = datetime.now() - timedelta(hours=25)
         sighting = list(create_mock_sighting(hours_ago=1))
-        sighting[6] = created_at  # Replace created_at with datetime object
+        sighting[7] = created_at  # Replace created_at with datetime object
         sightings = [tuple(sighting)]
         assert should_trigger_batch_post(sightings) is True
 

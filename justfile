@@ -1,6 +1,9 @@
 # Oceans of NYC - Just Commands
 # Run `just` to see all available commands
 
+# Load environment variables from .env file
+set dotenv-load
+
 # Configure uv to use only its managed Python installations
 export UV_PYTHON_PREFERENCE := "only-managed"
 
@@ -38,23 +41,23 @@ setup: install setup-hooks
 
 # Run all tests
 test:
-    uv run pytest
+    uv run python -m pytest
 
 # Run unit tests only (fast, no external dependencies)
 test-unit:
-    uv run pytest -m unit -v
+    uv run python -m pytest -m unit -v
 
 # Run database tests (requires TEST_DATABASE_URL)
 test-db:
-    uv run pytest -m db -v
+    uv run python -m pytest -m db -v
 
 # Run integration tests (requires external services)
 test-integration:
-    uv run pytest -m integration -v
+    uv run python -m pytest -m integration -v
 
 # Run tests with coverage report
 test-coverage:
-    uv run pytest --cov=. --cov-report=html --cov-report=term-missing
+    uv run python -m pytest --cov=. --cov-report=html --cov-report=term-missing
 
 # Run tests and open coverage report
 test-coverage-open: test-coverage
@@ -62,11 +65,11 @@ test-coverage-open: test-coverage
 
 # Run specific test file
 test-file FILE:
-    uv run pytest {{FILE}} -v
+    uv run python -m pytest {{FILE}} -v
 
 # Run tests matching a pattern
 test-pattern PATTERN:
-    uv run pytest -k {{PATTERN}} -v
+    uv run python -m pytest -k {{PATTERN}} -v
 
 # Run tests in watch mode (requires pytest-watch)
 test-watch:
@@ -243,7 +246,7 @@ stats:
     @find . -name "*.py" -not -path "./.venv/*" -not -path "./.pytest_cache/*" -exec wc -l {} + | tail -1
     @echo ""
     @echo "=== Test Statistics ==="
-    @uv run pytest --collect-only -q 2>/dev/null | tail -1
+    @uv run python -m pytest --collect-only -q 2>/dev/null | tail -1
     @echo ""
     @echo "=== Beads Statistics ==="
     @bd stats

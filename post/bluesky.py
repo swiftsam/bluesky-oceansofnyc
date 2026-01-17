@@ -164,8 +164,8 @@ class BlueskyClient:
 
         Args:
             sightings: List of sighting tuples from get_unposted_sightings()
-                (id, license_plate, timestamp, lat, lon, image_path, created_at, post_uri,
-                 contributor_id, preferred_name, bluesky_handle, phone_number)
+                (id, license_plate, timestamp, lat, lon, image_filename, borough, created_at,
+                 post_uri, contributor_id, preferred_name, bluesky_handle, phone_number)
             unique_sighted: Number of unique Fisker plates sighted
             total_fiskers: Total number of Fisker vehicles in TLC database
             contributor_stats: Optional dict mapping contributor_id to total all-time sighting count
@@ -186,9 +186,9 @@ class BlueskyClient:
         # contributor_id -> {display_name, count_in_batch, total_count}
         contributor_info = {}
         for sighting in sightings:
-            contributor_id = sighting[8]  # contributor_id
-            preferred_name = sighting[9]  # preferred_name
-            bluesky_handle = sighting[10]  # bluesky_handle
+            contributor_id = sighting[9]  # contributor_id
+            preferred_name = sighting[10]  # preferred_name
+            bluesky_handle = sighting[11]  # bluesky_handle
 
             if contributor_id not in contributor_info:
                 # Determine display name
@@ -263,11 +263,20 @@ class BlueskyClient:
         for sighting in sightings[:4]:  # Only take first 4 for image limit
             image_filename = sighting[5]  # image_filename column
             license_plate = sighting[1]  # license_plate column
+            borough = sighting[6]  # borough column
+            preferred_name = sighting[10]  # preferred_name column
 
             # Derive path from filename
             image_path = processor.get_original_path(image_filename)
             images.append(image_path)
-            image_alts.append(f"Fisker Ocean with plate {license_plate}")
+
+            # Build alt text with plate, contributor, and location
+            alt_text = f"Fisker Ocean with plate {license_plate}"
+            if preferred_name:
+                alt_text += f" by {preferred_name}"
+            if borough:
+                alt_text += f" in {borough}"
+            image_alts.append(alt_text)
 
         # Upload images
         embed = None

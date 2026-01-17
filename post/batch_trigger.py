@@ -29,9 +29,9 @@ def should_trigger_batch_post(unposted_sightings: list) -> bool:
         return True
 
     # Condition 2: Check if oldest sighting has been waiting 24+ hours
-    # created_at is at index 6 in the tuple
+    # created_at is at index 7 in the tuple (after borough)
     oldest_sighting = unposted_sightings[0]  # Already sorted by timestamp ASC
-    created_at_str = oldest_sighting[6]
+    created_at_str = oldest_sighting[7]
 
     try:
         # Parse the created_at timestamp
@@ -80,7 +80,7 @@ def get_batch_post_stats(unposted_sightings: list) -> dict:
         return {"count": 0, "oldest_hours": None, "should_post": False}
 
     oldest_sighting = unposted_sightings[0]
-    created_at_str = oldest_sighting[6]
+    created_at_str = oldest_sighting[7]
 
     oldest_hours = None
     try:

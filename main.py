@@ -173,7 +173,8 @@ def list_sightings(plate: str = None):
         click.echo(f"  Timestamp: {sighting[2]}")
         click.echo(f"  Location: {sighting[3]}, {sighting[4]}")
         click.echo(f"  Image: {sighting[5]}")
-        click.echo(f"  Recorded: {sighting[6]}\n")
+        click.echo(f"  Borough: {sighting[6]}")
+        click.echo(f"  Recorded: {sighting[7]}\n")
 
 
 @cli.command()
@@ -314,9 +315,9 @@ def post(sighting_id: int):
 
         # Extract sighting info for preview
         license_plate = sighting[1]
-        contributor_id = sighting[8]
-        preferred_name = sighting[9]
-        bluesky_handle = sighting[10]
+        contributor_id = sighting[9]
+        preferred_name = sighting[10]
+        bluesky_handle = sighting[11]
 
         # Determine contributor display name
         contributor_name = "Unknown"
@@ -681,14 +682,14 @@ def batch_post(limit: int = None, preview: bool = False):
             click.echo("PREVIEW: Sightings that would be posted")
             click.echo(f"{'='*60}\n")
             for idx, sighting in enumerate(unposted, 1):
-                # Schema: id, license_plate, timestamp, latitude, longitude, image_filename, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
+                # Schema: id, license_plate, timestamp, latitude, longitude, image_filename, borough, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
                 sighting_id = sighting[0]
                 license_plate = sighting[1]
                 timestamp = sighting[2]
                 image_filename = sighting[5]
-                # sighting[8] is contributor_id (not used here)
-                preferred_name = sighting[9]
-                bluesky_handle = sighting[10]
+                # sighting[9] is contributor_id (not used here)
+                preferred_name = sighting[10]
+                bluesky_handle = sighting[11]
 
                 # Format timestamp
                 from datetime import datetime
@@ -713,18 +714,19 @@ def batch_post(limit: int = None, preview: bool = False):
 
         for idx, sighting in enumerate(unposted, 1):
             # Unpack sighting data
-            # Schema: id, license_plate, timestamp, latitude, longitude, image_filename, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
+            # Schema: id, license_plate, timestamp, latitude, longitude, image_filename, borough, created_at, post_uri, contributor_id, preferred_name, bluesky_handle, phone_number
             sighting_id = sighting[0]
             license_plate = sighting[1]
             # timestamp = sighting[2]  # Not used in new format
             # latitude = sighting[3]  # Not used in new format
             # longitude = sighting[4]  # Not used in new format
             image_filename = sighting[5]
-            # sighting[6] is created_at
-            # sighting[7] is post_uri
-            # sighting[8] is contributor_id (not used here)
-            preferred_name = sighting[9]
-            bluesky_handle = sighting[10]
+            # sighting[6] is borough
+            # sighting[7] is created_at
+            # sighting[8] is post_uri
+            # sighting[9] is contributor_id (not used here)
+            preferred_name = sighting[10]
+            bluesky_handle = sighting[11]
 
             click.echo(f"\n{'='*60}")
             click.echo(f"Sighting {idx}/{len(unposted)} (ID: {sighting_id})")
@@ -735,7 +737,7 @@ def batch_post(limit: int = None, preview: bool = False):
             total_fiskers = db.get_tlc_vehicle_count()
             contributor_stats = db.get_all_contributor_sighting_counts()
 
-            contributor_id = sighting[8]
+            contributor_id = sighting[9]
             contributor_name = "Unknown"
             total_count = 0
 

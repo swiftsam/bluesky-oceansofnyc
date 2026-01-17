@@ -50,54 +50,43 @@ def create_twiml_response(message: str) -> str:
 </Response>"""
 
 
-def trigger_web_data_generation():
+def spawn_background_processing(
+    image_filename: str,
+    plate: str,
+    contributor_id: int,
+    from_number: str,
+):
     """
-    Trigger background generation of vehicles.json and upload to R2.
+    Spawn background processing for a saved sighting.
 
-    This is called asynchronously after a sighting is successfully added
-    to keep the webhook response fast.
-    """
-    try:
-        # Import here to avoid circular dependencies and Modal issues
-        from web.generate_data import generate_vehicle_data
+    This spawns a Modal function to handle slow operations asynchronously,
+    allowing the webhook to return the TwiML response immediately.
 
-        print("🔄 Triggering web data generation in background...")
-        # Run synchronously but don't block the webhook response
-        result = generate_vehicle_data(upload_to_r2=True)
-        if result["status"] == "success":
-            print(f"✓ Web data updated: {result['sighted']}/{result['total']} vehicles")
-        else:
-            print(f"⚠️ Web data generation failed: {result}")
-    except Exception as e:
-        # Don't fail the webhook if data generation fails
-        print(f"⚠️ Failed to trigger web data generation: {e}")
+    Background tasks include:
+    - Uploading web-optimized image to R2
+    - Regenerating vehicles.json
+    - Checking if batch post should be triggered
+    - Sending admin notification
 
-
-def check_and_post_batch():
-    """
-    Check if conditions are met to trigger a batch post and do it if needed.
-
-    This is called after a sighting is saved to check if we should post immediately
-    based on:
-    - 4 or more sightings waiting, OR
-    - Oldest sighting has been waiting 24+ hours
-
-    This function is safe to call from webhooks - it won't block or fail the response.
+    Args:
+        image_filename: The filename of the saved image
+        plate: The validated license plate
+        contributor_id: The contributor's database ID
+        from_number: The contributor's phone number
     """
     try:
-        print("🔍 Checking if batch post should be triggered...")
+        from modal_app import process_sighting_background
 
-        # Import Modal function dynamically to avoid issues
-        # This assumes we're running in a Modal context
-        from modal_app import check_and_trigger_batch_post
-
-        # Call the Modal function asynchronously
-        check_and_trigger_batch_post.spawn()
-        print("✓ Batch post check spawned in background")
-
+        process_sighting_background.spawn(
+            image_filename=image_filename,
+            plate=plate,
+            contributor_id=contributor_id,
+            from_number=from_number,
+        )
+        print("✓ Background processing spawned")
     except Exception as e:
-        # Don't fail the webhook if batch check fails
-        print(f"⚠️ Failed to trigger batch post check: {e}")
+        # Don't fail the webhook if background spawn fails
+        print(f"⚠️ Failed to spawn background processing: {e}")
 
 
 def handle_incoming_sms(
@@ -325,7 +314,6 @@ def handle_incoming_sms(
                             )
 
                         sighting_id = result["id"]
-                        processor.upload_web_version(final_filename)
                         print(f"✅ Sighting saved for plate {validated_plate} (ID: {sighting_id})")
 
                         if result["duplicate_type"] == "similar":
@@ -334,18 +322,18 @@ def handle_incoming_sms(
                                 f"⚠️ Similar image detected (distance: {dup_info['distance']}), but allowing submission"
                             )
 
-                        trigger_web_data_generation()
-                        check_and_post_batch()
-
-                        if contributor_id != 1:
-                            from notify import send_admin_notification
-
-                            display_name = contributor.get("preferred_name") or from_number
-                            send_admin_notification(f"Successful submission from {display_name}")
-
+                        # Get stats for confirmation message (fast queries)
                         vehicle_sighting_num = db.get_sighting_count(validated_plate)
                         total_sightings = db.get_total_sighting_count()
                         contributor_sighting_num = db.get_contributor_sighting_count(contributor_id)
+
+                        # Spawn background processing (R2 upload, web data gen, batch check, admin notification)
+                        spawn_background_processing(
+                            image_filename=final_filename,
+                            plate=validated_plate,
+                            contributor_id=contributor_id,
+                            from_number=from_number,
+                        )
 
                         contributor = db.get_contributor(contributor_id=contributor_id)
                         print(f"🔍 Contributor check: {contributor}")
@@ -440,7 +428,6 @@ def handle_incoming_sms(
                 )
 
             sighting_id = result["id"]
-            processor.upload_web_version(final_filename)
             print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
 
             # Warn if similar image detected
@@ -450,22 +437,18 @@ def handle_incoming_sms(
                     f"⚠️ Similar image detected (distance: {dup_info['distance']}), but allowing submission"
                 )
 
-            # Trigger web data generation in background
-            trigger_web_data_generation()
-            check_and_post_batch()
-
-            # Send notification for successful submission (non-admin contributors only)
-            if contributor_id != 1:
-                from notify import send_admin_notification
-
-                contributor = db.get_contributor(contributor_id=contributor_id)
-                display_name = contributor.get("preferred_name") or from_number
-                send_admin_notification(f"Successful submission from {display_name}")
-
-            # Get stats for the confirmation message
+            # Get stats for the confirmation message (fast queries)
             vehicle_sighting_num = db.get_sighting_count(plate)
             total_sightings = db.get_total_sighting_count()
             contributor_sighting_num = db.get_contributor_sighting_count(contributor_id)
+
+            # Spawn background processing (R2 upload, web data gen, batch check, admin notification)
+            spawn_background_processing(
+                image_filename=final_filename,
+                plate=plate,
+                contributor_id=contributor_id,
+                from_number=from_number,
+            )
 
             # Check if contributor has a preferred name
             contributor = db.get_contributor(contributor_id=contributor_id)
@@ -570,7 +553,6 @@ def handle_incoming_sms(
                     )
 
                 sighting_id = result["id"]
-                processor.upload_web_version(final_filename)
                 print(f"✅ Sighting saved for plate {plate} (ID: {sighting_id})")
 
                 if result["duplicate_type"] == "similar":
@@ -579,19 +561,18 @@ def handle_incoming_sms(
                         f"⚠️ Similar image detected (distance: {dup_info['distance']}), but allowing submission"
                     )
 
-                trigger_web_data_generation()
-                check_and_post_batch()
-
-                if contributor_id != 1:
-                    from notify import send_admin_notification
-
-                    contributor = db.get_contributor(contributor_id=contributor_id)
-                    display_name = contributor.get("preferred_name") or from_number
-                    send_admin_notification(f"Successful submission from {display_name}")
-
+                # Get stats for confirmation message (fast queries)
                 vehicle_sighting_num = db.get_sighting_count(plate)
                 total_sightings = db.get_total_sighting_count()
                 contributor_sighting_num = db.get_contributor_sighting_count(contributor_id)
+
+                # Spawn background processing (R2 upload, web data gen, batch check, admin notification)
+                spawn_background_processing(
+                    image_filename=final_filename,
+                    plate=plate,
+                    contributor_id=contributor_id,
+                    from_number=from_number,
+                )
 
                 contributor = db.get_contributor(contributor_id=contributor_id)
                 if not contributor["preferred_name"]:

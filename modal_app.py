@@ -57,6 +57,83 @@ MAPS_PATH = f"{VOLUME_PATH}/maps"
 TLC_PATH = f"{VOLUME_PATH}/tlc"
 
 
+@app.function(
+    image=image,
+    secrets=secrets,
+    volumes={VOLUME_PATH: volume},
+)
+def process_sighting_background(
+    image_filename: str,
+    plate: str,
+    contributor_id: int,
+    from_number: str,
+):
+    """
+    Handle post-sighting background work after the TwiML response is sent.
+
+    This function is spawned asynchronously to avoid blocking the Twilio webhook response.
+    It handles:
+    - Uploading the web-optimized image to R2
+    - Regenerating vehicles.json
+    - Checking if a batch post should be triggered
+    - Sending admin notification for non-admin contributors
+
+    Args:
+        image_filename: The filename of the saved image
+        plate: The validated license plate
+        contributor_id: The contributor's database ID
+        from_number: The contributor's phone number (for display name lookup)
+    """
+    from database import SightingsDatabase
+    from notify import send_admin_notification
+    from utils.image_processor import ImageProcessor
+    from web.generate_data import generate_vehicle_data
+
+    print(f"🔄 Processing background work for {plate}...")
+
+    # 1. Upload web version to R2
+    try:
+        processor = ImageProcessor(volume_path=VOLUME_PATH)
+        processor.upload_web_version(image_filename)
+        print(f"✓ Uploaded to R2: {image_filename}")
+    except Exception as e:
+        print(f"⚠️ Failed to upload to R2: {e}")
+
+    # 2. Regenerate web data
+    try:
+        print("🔄 Triggering web data generation...")
+        result = generate_vehicle_data(upload_to_r2=True)
+        if result["status"] == "success":
+            print(f"✓ Web data updated: {result['sighted']}/{result['total']} vehicles")
+        else:
+            print(f"⚠️ Web data generation failed: {result}")
+    except Exception as e:
+        print(f"⚠️ Failed to generate web data: {e}")
+
+    # 3. Check and trigger batch post
+    try:
+        print("🔍 Checking if batch post should be triggered...")
+        check_and_trigger_batch_post.spawn()
+        print("✓ Batch post check spawned")
+    except Exception as e:
+        print(f"⚠️ Failed to trigger batch post check: {e}")
+
+    # 4. Send admin notification for non-admin contributors
+    if contributor_id != 1:
+        try:
+            db = SightingsDatabase()
+            contributor = db.get_contributor(contributor_id=contributor_id)
+            display_name = contributor.get("preferred_name") or from_number
+            send_admin_notification(f"Successful submission from {display_name}")
+            print(f"✓ Admin notification sent for {display_name}")
+        except Exception as e:
+            print(f"⚠️ Failed to send admin notification: {e}")
+
+    # Commit volume changes
+    volume.commit()
+    print(f"✅ Background processing complete for {plate}")
+
+
 @app.function(image=image, secrets=secrets)
 def check_and_trigger_batch_post():
     """

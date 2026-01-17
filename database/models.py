@@ -395,15 +395,15 @@ class SightingsDatabase:
         Get all sightings that haven't been posted yet.
 
         Returns tuples with contributor info:
-        (id, license_plate, timestamp, latitude, longitude, image_filename, created_at, post_uri,
-         contributor_id, preferred_name, bluesky_handle, phone_number)
+        (id, license_plate, timestamp, latitude, longitude, image_filename, borough, created_at,
+         post_uri, contributor_id, preferred_name, bluesky_handle, phone_number)
         """
         conn = self._get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             SELECT s.id, s.license_plate, s.timestamp, s.latitude, s.longitude, s.image_filename,
-                   s.created_at, s.post_uri, s.contributor_id,
+                   s.borough, s.created_at, s.post_uri, s.contributor_id,
                    c.preferred_name, c.bluesky_handle, c.phone_number
             FROM sightings s
             LEFT JOIN contributors c ON s.contributor_id = c.id
