@@ -233,9 +233,12 @@ class TestFindSimilarPlates:
         # Search for T111113C
         similar = find_similar_plates("T111113C", test_db_url, max_results=5)
 
-        # T111112C differs by 1, T111111C differs by 2, T111122C differs by 2
-        # T111112C should be first
-        assert similar[0] == "T111112C"
+        # T111111C differs by 1 (pos 7: 1→3), T111112C differs by 1 (pos 7: 2→3)
+        # T111122C differs by 2 (pos 6: 2→1, pos 7: 2→3)
+        # Both T111111C and T111112C have 1 diff, alphabetically T111111C comes first
+        assert similar[0] == "T111111C"
+        # T111122C should be last (2 diffs)
+        assert similar[-1] == "T111122C"
 
     def test_find_similar_plates_max_results(self, test_db_url, clean_db):
         """Test max_results limiting."""

@@ -5,6 +5,9 @@ from datetime import datetime
 
 import psycopg2
 
+# Sentinel value to indicate "set to NULL" vs "don't update"
+_UNSET = object()
+
 
 class ChatSession:
     """Manages conversation state for a phone number."""
@@ -62,14 +65,14 @@ class ChatSession:
 
     def update(
         self,
-        state: str | None = None,
-        pending_image_path: str | None = None,
-        pending_plate: str | None = None,
-        pending_latitude: float | None = None,
-        pending_longitude: float | None = None,
-        pending_timestamp: datetime | None = None,
-        pending_borough: str | None = None,
-        pending_image_timestamp: datetime | None = None,
+        state: str | None = _UNSET,
+        pending_image_path: str | None = _UNSET,
+        pending_plate: str | None = _UNSET,
+        pending_latitude: float | None = _UNSET,
+        pending_longitude: float | None = _UNSET,
+        pending_timestamp: datetime | None = _UNSET,
+        pending_borough: str | None = _UNSET,
+        pending_image_timestamp: datetime | None = _UNSET,
     ):
         """Update session state.
 
@@ -79,16 +82,16 @@ class ChatSession:
         updates = []
         params = []
 
-        if state is not None:
+        if state is not _UNSET:
             updates.append("state = %s")
             params.append(state)
-        if pending_image_path is not None:
+        if pending_image_path is not _UNSET:
             updates.append("pending_image_path = %s")
             params.append(pending_image_path)
-        if pending_plate is not None:
+        if pending_plate is not _UNSET:
             updates.append("pending_plate = %s")
             params.append(pending_plate)
-        if pending_borough is not None:
+        if pending_borough is not _UNSET:
             updates.append("pending_borough = %s")
             params.append(pending_borough)
 
@@ -98,21 +101,21 @@ class ChatSession:
             # Always update these fields when changing to these states
             # This handles both new images (AWAITING_PLATE) and resets (IDLE)
             updates.append("pending_latitude = %s")
-            params.append(pending_latitude)
+            params.append(pending_latitude if pending_latitude is not _UNSET else None)
             updates.append("pending_longitude = %s")
-            params.append(pending_longitude)
-        elif pending_latitude is not None or pending_longitude is not None:
-            # For other states, only update if values are non-None
+            params.append(pending_longitude if pending_longitude is not _UNSET else None)
+        elif pending_latitude is not _UNSET or pending_longitude is not _UNSET:
+            # For other states, only update if explicitly passed
             updates.append("pending_latitude = %s")
-            params.append(pending_latitude)
+            params.append(pending_latitude if pending_latitude is not _UNSET else None)
             updates.append("pending_longitude = %s")
-            params.append(pending_longitude)
+            params.append(pending_longitude if pending_longitude is not _UNSET else None)
 
-        if pending_timestamp is not None:
+        if pending_timestamp is not _UNSET:
             updates.append("pending_timestamp = %s")
             params.append(pending_timestamp)
 
-        if pending_image_timestamp is not None:
+        if pending_image_timestamp is not _UNSET:
             updates.append("pending_image_timestamp = %s")
             params.append(pending_image_timestamp)
 

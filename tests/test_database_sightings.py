@@ -65,7 +65,7 @@ class TestAddSighting:
         assert result is not None
         sighting = db.get_sighting_by_id(result["id"])
         # Borough should be detected as Manhattan from coordinates
-        assert sighting[9] == "Manhattan"  # borough is column 9
+        assert sighting["borough"] == "Manhattan"
 
     def test_add_sighting_exact_duplicate_rejected(
         self, test_db_url, sample_contributor, temp_image
@@ -171,8 +171,8 @@ class TestAddSighting:
 
         assert result is not None
         sighting = db.get_sighting_by_id(result["id"])
-        # Verify image_filename was saved (column 13)
-        assert sighting[13] == "T890123C_20251206_184123_0000.jpg"
+        # Verify image_filename was saved
+        assert sighting["image_filename"] == "T890123C_20251206_184123_0000.jpg"
 
     def test_add_sighting_without_gps(self, test_db_url, sample_contributor, temp_image):
         """Test adding sighting without GPS coordinates."""
@@ -195,7 +195,7 @@ class TestAddSighting:
 
         assert result is not None
         sighting = db.get_sighting_by_id(result["id"])
-        assert sighting[9] == "Brooklyn"
+        assert sighting["borough"] == "Brooklyn"
 
 
 @pytest.mark.db

@@ -190,17 +190,17 @@ class SightingsDatabase:
             check_exact_duplicate,
             find_similar_images,
         )
-        from utils.image_processor import ImageProcessor
 
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        # Derive image path from filename for hash calculation
-        processor = ImageProcessor()
-        image_path = processor.get_original_path(image_filename)
-
-        # Calculate hashes if not provided
+        # Calculate hashes if not provided (requires accessing the image file)
         if image_hash_sha256 is None or image_hash_perceptual is None:
+            from utils.image_processor import ImageProcessor
+
+            # Derive image path from filename for hash calculation
+            processor = ImageProcessor()
+            image_path = processor.get_original_path(image_filename)
             try:
                 sha256, phash = calculate_both_hashes(image_path)
                 image_hash_sha256 = image_hash_sha256 or sha256
@@ -275,9 +275,13 @@ class SightingsDatabase:
             conn.close()
 
     def get_sighting_by_id(self, sighting_id: int):
-        """Get a sighting by ID."""
+        """Get a sighting by ID.
+
+        Returns:
+            Dict with sighting data, or None if not found
+        """
         conn = self._get_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         cursor.execute("SELECT * FROM sightings WHERE id = %s", (sighting_id,))
         sighting = cursor.fetchone()
